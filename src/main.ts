@@ -184,7 +184,6 @@ async function bootstrap() {
 			...document.querySelectorAll<HTMLButtonElement>(".progress-dot"),
 		];
 		const scrollHint = document.querySelector<HTMLElement>("#scroll-hint");
-		const storyViewport = getRequiredElement<HTMLElement>(".story-viewport");
 		const menuToggle =
 			getRequiredElement<HTMLButtonElement>("#nav-menu-toggle");
 		const menuPanel = getRequiredElement<HTMLElement>("#nav-menu-panel");
@@ -221,7 +220,6 @@ async function bootstrap() {
 			menuPanel.removeAttribute("hidden");
 			menuBackdrop.removeAttribute("hidden");
 			menuToggle.setAttribute("aria-expanded", "true");
-			storyViewport.classList.add("story-viewport--menu-open");
 			menuClose.focus();
 		};
 
@@ -229,7 +227,6 @@ async function bootstrap() {
 			menuPanel.setAttribute("hidden", "");
 			menuBackdrop.setAttribute("hidden", "");
 			menuToggle.setAttribute("aria-expanded", "false");
-			storyViewport.classList.remove("story-viewport--menu-open");
 			menuToggle.focus();
 		};
 
