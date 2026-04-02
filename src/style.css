@@ -339,6 +339,20 @@ select {
 	will-change: opacity, transform, filter;
 }
 
+.scene-layer--split {
+	display: grid;
+	place-items: center;
+	padding: 72px 40px 100px;
+}
+
+.scene-layout {
+	width: min(1480px, calc(100vw - 80px));
+	display: grid;
+	grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+	align-items: center;
+	gap: clamp(28px, 4vw, 56px);
+}
+
 /* ---------- Viz area (fills the scene layer) ---------- */
 
 .scene-viz {
@@ -351,6 +365,15 @@ select {
 	padding: 46px 20px 100px 20px;
 }
 
+.scene-layer--split .scene-viz {
+	position: relative;
+	inset: auto;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+	justify-content: flex-start;
+}
+
 .scene-viz svg {
 	width: auto;
 	height: auto;
@@ -359,6 +382,12 @@ select {
 	display: block;
 	font-family:
 		Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.scene-layer--split .scene-viz svg {
+	width: 100%;
+	max-width: min(1040px, calc(100vw - 520px));
+	max-height: min(72vh, calc(100dvh - 180px));
 }
 
 /* ---------- Text card (glass overlay on the viz) ---------- */
@@ -378,6 +407,16 @@ select {
 	flex-direction: column;
 	gap: 10px;
 	z-index: 3;
+}
+
+.scene-layer--split .scene-copy {
+	position: relative;
+	left: auto;
+	right: auto;
+	bottom: auto;
+	width: 100%;
+	max-width: 400px;
+	z-index: auto;
 }
 
 .eyebrow,
@@ -503,6 +542,29 @@ select {
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
+	.scene-layer--split {
+		padding: 76px 16px 100px;
+	}
+
+	.scene-layout {
+		width: min(100%, 960px);
+		grid-template-columns: 1fr;
+		gap: 18px;
+	}
+
+	.scene-layer--split .scene-viz {
+		order: 1;
+		justify-content: center;
+	}
+
+	.scene-layer--split .scene-copy {
+		order: 2;
+		left: auto;
+		right: auto;
+		bottom: auto;
+		max-width: none;
+	}
+
 	.scene-copy {
 		left: 16px;
 		right: 16px;
@@ -518,9 +580,18 @@ select {
 		max-width: calc(100vw - 24px);
 		max-height: min(52vh, calc(100dvh - 240px));
 	}
+
+	.scene-layer--split .scene-viz svg {
+		max-width: min(100%, 960px);
+		max-height: min(52vh, calc(100dvh - 240px));
+	}
 }
 
 @media (max-width: 600px) {
+	.scene-layer--split {
+		padding: 72px 10px 100px;
+	}
+
 	.scene-copy {
 		left: 10px;
 		right: 10px;
@@ -541,5 +612,10 @@ select {
 	.scene-viz svg {
 		max-width: calc(100vw - 16px);
 		max-height: min(48vh, calc(100dvh - 260px));
+	}
+
+	.scene-layer--split .scene-viz svg {
+		max-width: min(100%, 960px);
+		max-height: min(46vh, calc(100dvh - 260px));
 	}
 }

@@ -13,6 +13,24 @@ interface FlowData {
 interface PositionedNode extends FlowNodeDatum {
 	x: number;
 	y: number;
+	width: number;
+}
+
+const textMeasureCanvas = document.createElement("canvas");
+const textMeasureContext = textMeasureCanvas.getContext("2d");
+
+function measureLabelWidth(label: string) {
+	if (!textMeasureContext) {
+		return 184;
+	}
+	textMeasureContext.font =
+		'600 12.5px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+	return Math.ceil(textMeasureContext.measureText(label).width);
+}
+
+function getColumnWidth(labels: string[]) {
+	const widestLabel = d3.max(labels, measureLabelWidth) ?? 0;
+	return Math.max(156, Math.min(340, widestLabel + 36));
 }
 
 export function renderContractorFlow(
@@ -31,17 +49,25 @@ export function renderContractorFlow(
 			"aria-label",
 			"Diagramme de flux entre contracteurs et sites de lancement",
 		);
-	const contractorX = 170;
-	const siteX = 780;
+	const contractorWidth = getColumnWidth(
+		flow.contractors.map((node) => node.label),
+	);
+	const siteWidth = getColumnWidth(flow.sites.map((node) => node.label));
+	const contractorLeft = 92;
+	const siteRight = 910;
+	const contractorX = contractorLeft + contractorWidth / 2;
+	const siteX = siteRight - siteWidth / 2;
 	const contractorNodes = flow.contractors.map((node, index) => ({
 		...node,
 		x: contractorX,
 		y: 150 + index * 72,
+		width: contractorWidth,
 	}));
 	const siteNodes = flow.sites.map((node, index) => ({
 		...node,
 		x: siteX,
 		y: 150 + index * 72,
+		width: siteWidth,
 	}));
 	const nodeLookup = new Map<string, PositionedNode>(
 		[...contractorNodes, ...siteNodes].map((node) => [node.id, node]),
@@ -86,7 +112,9 @@ export function renderContractorFlow(
 			if (!source || !target) {
 				return "";
 			}
-			return `M ${source.x + 78} ${source.y} C ${source.x + 240} ${source.y}, ${target.x - 240} ${target.y}, ${target.x - 78} ${target.y}`;
+			const sourceEdge = source.x + source.width / 2;
+			const targetEdge = target.x - target.width / 2;
+			return `M ${sourceEdge} ${source.y} C ${sourceEdge + 150} ${source.y}, ${targetEdge - 150} ${target.y}, ${targetEdge} ${target.y}`;
 		})
 		.attr("fill", "none")
 		.attr("stroke", "rgba(125, 211, 252, 0.45)")
@@ -123,9 +151,9 @@ export function renderContractorFlow(
 
 		groups
 			.append("rect")
-			.attr("x", -78)
+			.attr("x", (node) => -node.width / 2)
 			.attr("y", -18)
-			.attr("width", 156)
+			.attr("width", (node) => node.width)
 			.attr("height", 36)
 			.attr("rx", 18)
 			.attr("fill", fill)
@@ -167,7 +195,7 @@ export function renderContractorFlow(
 
 	svg
 		.append("text")
-		.attr("x", 110)
+		.attr("x", contractorLeft)
 		.attr("y", 126)
 		.attr("fill", contractorColor)
 		.attr("font-size", 12)
@@ -176,7 +204,7 @@ export function renderContractorFlow(
 
 	svg
 		.append("text")
-		.attr("x", 740)
+		.attr("x", siteRight - siteWidth)
 		.attr("y", 126)
 		.attr("fill", siteColor)
 		.attr("font-size", 12)

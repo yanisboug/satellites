@@ -1,4 +1,3 @@
-# Build Vite → publish dist/ to GitHub Pages (Settings → Pages → Source: GitHub Actions).
 name: Deploy to GitHub Pages
 
 on:

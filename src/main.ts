@@ -48,6 +48,38 @@ function renderStoryShell(scenes: ReturnType<typeof buildScenes>) {
 		)
 		.join("");
 
+	const sceneMarkup = scenes
+		.map((scene, index) => {
+			const copyMarkup = `
+				<div class="scene-copy">
+					<p class="step-kicker">${scene.kicker}</p>
+					<h2>${scene.title}</h2>
+					<p class="step-lede">${scene.lede}</p>
+					<p>${scene.body}</p>
+					<p class="step-accent">${scene.accent}</p>
+				</div>
+			`;
+
+			if (scene.id === "intro") {
+				return `
+					<div class="scene-layer scene-layer--intro" data-scene-index="${index}" data-scene-id="${scene.id}">
+						<div class="scene-viz" id="viz-${scene.id}"></div>
+						${copyMarkup}
+					</div>
+				`;
+			}
+
+			return `
+				<div class="scene-layer scene-layer--split" data-scene-index="${index}" data-scene-id="${scene.id}">
+					<div class="scene-layout">
+						${copyMarkup}
+						<div class="scene-viz" id="viz-${scene.id}"></div>
+					</div>
+				</div>
+			`;
+		})
+		.join("");
+
 	return `
 		<div class="story-viewport">
 			<div class="nav-menu">
@@ -87,22 +119,7 @@ function renderStoryShell(scenes: ReturnType<typeof buildScenes>) {
 				</div>
 			</div>
 
-			${scenes
-				.map(
-					(scene, index) => `
-					<div class="scene-layer" data-scene-index="${index}">
-						<div class="scene-viz" id="viz-${scene.id}"></div>
-						<div class="scene-copy">
-							<p class="step-kicker">${scene.kicker}</p>
-							<h2>${scene.title}</h2>
-							<p class="step-lede">${scene.lede}</p>
-							<p>${scene.body}</p>
-							<p class="step-accent">${scene.accent}</p>
-						</div>
-					</div>
-				`,
-				)
-				.join("")}
+			${sceneMarkup}
 
 			<div class="scene-nav">
 				<div class="scene-progress">
