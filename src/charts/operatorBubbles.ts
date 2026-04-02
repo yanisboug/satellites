@@ -30,10 +30,11 @@ export function renderOperatorBubbles(
 	const width = 960;
 	const height = 640;
 	const bubbleData = data.slice(0, 10);
+	const countries = [...new Set(bubbleData.map((item) => item.country))];
 	const maxShare = d3.max(bubbleData, (item) => item.share) ?? 0.001;
 
 	/* Area of disk ∝ share (market %) — radius ∝ sqrt(share) */
-	const radius = d3.scaleLinear().domain([0, maxShare]).range([1, 100]);
+	const radius = d3.scaleLinear().domain([0, maxShare]).range([8, 112]);
 
 	const packedNodes = d3.packSiblings(
 		bubbleData.map((item) => ({
@@ -49,8 +50,8 @@ export function renderOperatorBubbles(
 	const extentY = d3.extent(
 		packedNodes.flatMap((item) => [item.y - item.r, item.y + item.r]),
 	) as [number, number];
-	const packCenterX = 320;
-	const packCenterY = 300;
+	const packCenterX = 340;
+	const packCenterY = 304;
 	const offsetX = packCenterX - (extentX[0] + extentX[1]) / 2;
 	const offsetY = packCenterY - (extentY[0] + extentY[1]) / 2;
 	const nodes: BubbleNode[] = packedNodes.map((item) => ({
@@ -60,7 +61,9 @@ export function renderOperatorBubbles(
 	}));
 
 	const listX = 618;
-	const listTop = 118;
+	const legendX = 48;
+	const legendTop = 126;
+	const listTop = 182;
 	const listRowH = 34;
 	const listAnchorX = listX + 7;
 	const listAnchorY = (index: number) => listTop + index * listRowH + 12;
@@ -78,36 +81,7 @@ export function renderOperatorBubbles(
 
 	const pctFmt = (share: number) => `${Math.round(share * 100)} %`;
 
-	const highlight = (name: string | null) => {
-		stage
-			.selectAll<SVGGElement, BubbleNode>(".bubble-node")
-			.style("opacity", (item) => {
-				if (!name) {
-					return 1;
-				}
-				return item.name === name ? 1 : 0.18;
-			});
-
-		svg
-			.selectAll<SVGGElement, OperatorDatum>(".operator-item")
-			.style("opacity", (item) => {
-				if (!name) {
-					return 1;
-				}
-				return item.name === name ? 1 : 0.28;
-			});
-
-		connectorRoot
-			.selectAll<SVGLineElement, BubbleNode>(".operator-connector")
-			.style("opacity", (item) => {
-				if (!name) {
-					return 0.55;
-				}
-				return item.name === name ? 0.9 : 0.1;
-			});
-	};
-
-	connectorRoot
+	const connectorSelection = connectorRoot
 		.selectAll<SVGLineElement, BubbleNode>(".operator-connector")
 		.data(nodes)
 		.join("line")
@@ -131,7 +105,7 @@ export function renderOperatorBubbles(
 				.attr("y2", ty);
 		});
 
-	stage
+	const bubbleGroups = stage
 		.selectAll(".bubble-node")
 		.data(nodes)
 		.join("g")
@@ -148,7 +122,9 @@ export function renderOperatorBubbles(
 		.on("pointerleave", () => {
 			highlight(null);
 			tooltip.hide();
-		})
+		});
+
+	bubbleGroups
 		.append("circle")
 		.attr("r", (item) => item.r)
 		.attr("fill", (item) => operatorColor(item.country))
@@ -178,6 +154,88 @@ export function renderOperatorBubbles(
 			highlight(null);
 			tooltip.hide();
 		});
+
+	const legend = svg
+		.append("g")
+		.attr("transform", `translate(${legendX}, ${legendTop})`);
+
+	legend
+		.append("text")
+		.attr("x", 0)
+		.attr("y", -18)
+		.attr("fill", stagePalette.highlight)
+		.attr("font-size", 12)
+		.attr("letter-spacing", "0.12em")
+		.text("PAYS D'ORIGINE");
+
+	legend
+		.selectAll<SVGGElement, string>("g")
+		.data(countries)
+		.join("g")
+		.attr("transform", (_, index) => `translate(0, ${index * 28})`)
+		.style("cursor", "pointer")
+		.on("pointerenter", (_, country) => highlight(null, country))
+		.on("pointerleave", () => highlight(null, null))
+		.call((groups) => {
+			groups
+				.append("circle")
+				.attr("cx", 7)
+				.attr("cy", 7)
+				.attr("r", 7)
+				.attr("fill", (country) => operatorColor(country));
+
+			groups
+				.append("text")
+				.attr("x", 22)
+				.attr("y", 12)
+				.attr("fill", stagePalette.text)
+				.attr("font-size", 13)
+				.text((country) => country);
+		});
+
+	function highlight(name: string | null, country: string | null = null) {
+		bubbleGroups
+			.interrupt()
+			.transition()
+			.duration(220)
+			.style("opacity", (item) => {
+				if (name) {
+					return item.name === name ? 1 : 0.18;
+				}
+				if (country) {
+					return item.country === country ? 1 : 0.14;
+				}
+				return 1;
+			});
+
+		list
+			.interrupt()
+			.transition()
+			.duration(220)
+			.style("opacity", (item) => {
+				if (name) {
+					return item.name === name ? 1 : 0.28;
+				}
+				if (country) {
+					return item.country === country ? 1 : 0.18;
+				}
+				return 1;
+			});
+
+		connectorSelection
+			.interrupt()
+			.transition()
+			.duration(220)
+			.style("opacity", (item) => {
+				if (name) {
+					return item.name === name ? 0.9 : 0.08;
+				}
+				if (country) {
+					return item.country === country ? 0.9 : 0.06;
+				}
+				return 0.55;
+			});
+	}
 
 	list
 		.append("rect")
@@ -233,6 +291,6 @@ export function renderOperatorBubbles(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 13)
 		.text(
-			"Surface de chaque bulle proportionnelle à sa part du parc (%). Couleurs = pays d'origine.",
+			"Surface de chaque bulle proportionnelle à sa part du parc (%). Couleur = pays d'origine. Survolez la légende pour filtrer.",
 		);
 }
