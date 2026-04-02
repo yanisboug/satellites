@@ -152,9 +152,9 @@ select {
 /* Author `display: flex` on the panel otherwise wins over the [hidden] attribute */
 .nav-menu-panel[hidden],
 .nav-menu-backdrop[hidden] {
-	display: none !important;
-	pointer-events: none !important;
-	animation: none !important;
+	display: none;
+	pointer-events: none;
+	animation: none;
 	visibility: hidden;
 }
 
@@ -521,7 +521,7 @@ select {
 .viz-tooltip {
 	position: fixed;
 	z-index: 50;
-	max-width: 260px;
+	max-width: 340px;
 	padding: 12px 14px;
 	border-radius: 14px;
 	background: rgba(3, 9, 24, 0.96);
@@ -537,6 +537,56 @@ select {
 
 .viz-tooltip[data-visible="true"] {
 	opacity: 1;
+}
+
+.flow-tooltip {
+	display: grid;
+	gap: 8px;
+}
+
+.flow-tooltip-title {
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--text);
+}
+
+.flow-tooltip-total {
+	color: var(--text);
+	font-size: 0.92rem;
+}
+
+.flow-tooltip-section {
+	color: var(--accent);
+	font-size: 0.76rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.flow-tooltip-list {
+	display: grid;
+	gap: 6px;
+}
+
+.flow-tooltip-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: start;
+	padding-top: 6px;
+	border-top: 1px solid rgba(125, 211, 252, 0.1);
+}
+
+.flow-tooltip-label {
+	color: var(--text);
+	line-height: 1.3;
+}
+
+.flow-tooltip-value {
+	color: var(--accent);
+	font-weight: 700;
+	white-space: nowrap;
 }
 
 /* ---------- Responsive ---------- */

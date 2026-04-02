@@ -33,6 +33,41 @@ function getColumnWidth(labels: string[]) {
 	return Math.max(156, Math.min(340, widestLabel + 36));
 }
 
+function escapeHtml(text: string) {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
+}
+
+function renderBreakdownTooltip(
+	title: string,
+	total: number,
+	sectionLabel: string,
+	rows: { label: string; value: number }[],
+) {
+	return `
+		<div class="flow-tooltip">
+			<div class="flow-tooltip-title">${escapeHtml(title)}</div>
+			<div class="flow-tooltip-total">${d3.format(",")(total).replace(/,/g, " ")} satellites relies</div>
+			<div class="flow-tooltip-section">${escapeHtml(sectionLabel)}</div>
+			<div class="flow-tooltip-list">
+				${rows
+					.map(
+						(row) => `
+							<div class="flow-tooltip-row">
+								<span class="flow-tooltip-label">${escapeHtml(row.label)}</span>
+								<span class="flow-tooltip-value">${d3.format(",")(row.value).replace(/,/g, " ")}</span>
+							</div>
+						`,
+					)
+					.join("")}
+			</div>
+		</div>
+	`;
+}
+
 export function renderContractorFlow(
 	container: HTMLElement,
 	flow: FlowData,
@@ -76,10 +111,55 @@ export function renderContractorFlow(
 		.scaleSqrt()
 		.domain([0, d3.max(flow.links, (item) => item.value) ?? 0])
 		.range([2, 18]);
+	const formatCount = (value: number) =>
+		d3.format(",")(value).replace(/,/g, " ");
+
+	const getNodeBreakdown = (node: PositionedNode) => {
+		const relatedLinks = flow.links
+			.filter((link) =>
+				node.side === "contractor"
+					? link.source === node.id
+					: link.target === node.id,
+			)
+			.map((link) => {
+				const otherNodeId =
+					node.side === "contractor" ? link.target : link.source;
+				return {
+					label: nodeLookup.get(otherNodeId)?.label ?? otherNodeId,
+					value: link.value,
+				};
+			})
+			.sort((left, right) => right.value - left.value);
+
+		if (relatedLinks.length === 0) {
+			return "";
+		}
+
+		return renderBreakdownTooltip(
+			node.label,
+			node.value,
+			node.side === "contractor"
+				? "Vers les sites de lancement"
+				: "Satellites fournis par",
+			relatedLinks,
+		);
+	};
 	const contractorColor = "#2a9d8f";
 	const siteColor = "#457b9d";
 
 	const highlight = (nodeId: string | null) => {
+		const connectedNodeIds = new Set<string>();
+		if (nodeId) {
+			flow.links.forEach((link) => {
+				if (link.source === nodeId) {
+					connectedNodeIds.add(link.target);
+				}
+				if (link.target === nodeId) {
+					connectedNodeIds.add(link.source);
+				}
+			});
+		}
+
 		linkGroup
 			.selectAll<SVGPathElement, FlowLinkDatum>("path")
 			.style("opacity", (link) => {
@@ -95,7 +175,7 @@ export function renderContractorFlow(
 				if (!nodeId) {
 					return 1;
 				}
-				return node.id === nodeId ? 1 : 0.22;
+				return node.id === nodeId || connectedNodeIds.has(node.id) ? 1 : 0.22;
 			});
 	};
 
@@ -121,13 +201,19 @@ export function renderContractorFlow(
 		.attr("stroke-width", (link) => linkScale(link.value))
 		.attr("stroke-linecap", "round")
 		.on("pointerenter", (event, link) => {
+			const sourceLabel = nodeLookup.get(link.source)?.label ?? link.source;
+			const targetLabel = nodeLookup.get(link.target)?.label ?? link.target;
+			highlight(link.source);
 			tooltip.show(
-				`<strong>${link.source}</strong> → <strong>${nodeLookup.get(link.target)?.label ?? link.target}</strong><br>${d3.format(",")(link.value).replace(/,/g, " ")} satellites`,
+				`<strong>${escapeHtml(sourceLabel)}</strong> → <strong>${escapeHtml(targetLabel)}</strong><br>${formatCount(link.value)} satellites`,
 				event,
 			);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", () => {
+			highlight(null);
+			tooltip.hide();
+		});
 
 	const renderNodes = (nodes: PositionedNode[], fill: string) => {
 		const groups = nodeGroup
@@ -138,12 +224,15 @@ export function renderContractorFlow(
 			.style("cursor", "pointer")
 			.on("pointerenter", (event, node) => {
 				highlight(node.id);
-				tooltip.show(
-					`<strong>${node.label}</strong><br>${d3.format(",")(node.value).replace(/,/g, " ")} satellites relies`,
-					event,
-				);
+				tooltip.show(getNodeBreakdown(node), event, {
+					placement: node.side === "contractor" ? "left" : "right",
+				});
 			})
-			.on("pointermove", (event) => tooltip.move(event))
+			.on("pointermove", (event, node) =>
+				tooltip.move(event, {
+					placement: node.side === "contractor" ? "left" : "right",
+				}),
+			)
 			.on("pointerleave", () => {
 				highlight(null);
 				tooltip.hide();
