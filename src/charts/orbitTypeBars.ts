@@ -4,6 +4,67 @@ import type { OrbitMissionDatum } from "../types";
 import { stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
 
+const BAR_RADIUS = 12;
+
+/** Horizontal bar with optional rounding only on the left and/or right (for clean stacked joins). */
+function horizontalStackSegmentPath(
+	x0: number,
+	x1: number,
+	y: number,
+	h: number,
+	r: number,
+	roundLeft: boolean,
+	roundRight: boolean,
+): string {
+	const w = x1 - x0;
+	if (w <= 0) {
+		return "";
+	}
+	const maxR = Math.min(r, h / 2, w / 2);
+	const rl = roundLeft ? maxR : 0;
+	const rr = roundRight ? maxR : 0;
+
+	if (rl === 0 && rr === 0) {
+		return `M${x0},${y}H${x1}V${y + h}H${x0}Z`;
+	}
+	if (rl > 0 && rr === 0) {
+		return [
+			`M${x0 + rl},${y}`,
+			`H${x1}`,
+			`V${y + h}`,
+			`H${x0 + rl}`,
+			`A${rl} ${rl} 0 0 1 ${x0},${y + h - rl}`,
+			`V${y + rl}`,
+			`A${rl} ${rl} 0 0 1 ${x0 + rl},${y}`,
+			`Z`,
+		].join("");
+	}
+	if (rl === 0 && rr > 0) {
+		return [
+			`M${x0},${y}`,
+			`H${x1 - rr}`,
+			`A${rr} ${rr} 0 0 1 ${x1},${y + rr}`,
+			`V${y + h - rr}`,
+			`A${rr} ${rr} 0 0 1 ${x1 - rr},${y + h}`,
+			`H${x0}`,
+			`V${y}`,
+			`Z`,
+		].join("");
+	}
+	return [
+		`M${x0 + rl},${y}`,
+		`H${x1 - rr}`,
+		`A${rr} ${rr} 0 0 1 ${x1},${y + rr}`,
+		`V${y + h - rr}`,
+		`A${rr} ${rr} 0 0 1 ${x1 - rr},${y + h}`,
+		`H${x0 + rl}`,
+		`A${rl} ${rl} 0 0 1 ${x0},${y + h - rl}`,
+		`V${y + rl}`,
+		`A${rl} ${rl} 0 0 1 ${x0 + rl},${y}`,
+		`Z`,
+	].join("");
+}
+
 export function renderOrbitTypeBars(
 	container: HTMLElement,
 	data: OrbitMissionDatum[],
@@ -86,12 +147,35 @@ export function renderOrbitTypeBars(
 				datum: data[index],
 			})),
 		)
-		.join("rect")
-		.attr("x", (item) => x(item.bounds[0]))
-		.attr("y", (item) => y(item.datum.typeOrbit) ?? 0)
-		.attr("width", (item) => x(item.bounds[1]) - x(item.bounds[0]))
-		.attr("height", y.bandwidth())
-		.attr("rx", 12)
+		.join("path")
+		.attr("d", (item) => {
+			const x0 = x(item.bounds[0]);
+			const x1 = x(item.bounds[1]);
+			const y0 = y(item.datum.typeOrbit) ?? 0;
+			const h = y.bandwidth();
+			const d = item.datum;
+			if (item.key === "commercial") {
+				return horizontalStackSegmentPath(
+					x0,
+					x1,
+					y0,
+					h,
+					BAR_RADIUS,
+					true,
+					d.other === 0,
+				);
+			}
+			return horizontalStackSegmentPath(
+				x0,
+				x1,
+				y0,
+				h,
+				BAR_RADIUS,
+				d.commercial === 0,
+				true,
+			);
+		})
+		.attr("shape-rendering", "geometricPrecision")
 		.on("pointerenter", (event, item) => {
 			tooltip.show(
 				`<strong>${item.datum.typeOrbit}</strong><br>Commercial: ${d3.format(",")(item.datum.commercial).replace(/,/g, " ")}<br>Autres missions: ${d3.format(",")(item.datum.other).replace(/,/g, " ")}`,
@@ -114,7 +198,12 @@ export function renderOrbitTypeBars(
 				`${Math.round((item.commercial / item.total) * 100)} % commercial`,
 		);
 
-	const legend = svg.append("g").attr("transform", "translate(690, 150)");
+	const legend = svg
+		.append("g")
+		.attr(
+			"transform",
+			`translate(${margin.left}, ${margin.top + innerHeight + 30})`,
+		);
 
 	[
 		{ label: "Commercial", color: colors.commercial },
@@ -122,7 +211,7 @@ export function renderOrbitTypeBars(
 	].forEach((item, index) => {
 		const group = legend
 			.append("g")
-			.attr("transform", `translate(0, ${index * 30})`);
+			.attr("transform", `translate(${index * 220}, 0)`);
 		group
 			.append("rect")
 			.attr("width", 14)
