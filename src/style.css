@@ -41,10 +41,25 @@ body::before {
 	position: fixed;
 	inset: 0;
 	background-image:
-		radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px),
-		radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px),
-		radial-gradient(circle at 30% 80%, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px);
-	background-size: 220px 220px, 300px 300px, 420px 420px;
+		radial-gradient(
+			circle at 10% 20%,
+			rgba(255, 255, 255, 0.08) 0 1px,
+			transparent 1px
+		),
+		radial-gradient(
+			circle at 70% 30%,
+			rgba(255, 255, 255, 0.06) 0 1px,
+			transparent 1px
+		),
+		radial-gradient(
+			circle at 30% 80%,
+			rgba(255, 255, 255, 0.04) 0 1px,
+			transparent 1px
+		);
+	background-size:
+		220px 220px,
+		300px 300px,
+		420px 420px;
 	pointer-events: none;
 	opacity: 0.5;
 	z-index: 0;
@@ -159,6 +174,7 @@ select {
 	from {
 		opacity: 0;
 	}
+
 	to {
 		opacity: 1;
 	}
@@ -191,6 +207,7 @@ select {
 		transform: translateX(100%);
 		opacity: 0.9;
 	}
+
 	to {
 		transform: translateX(0);
 		opacity: 1;
@@ -466,6 +483,7 @@ select {
 	100% {
 		opacity: 0.5;
 	}
+
 	50% {
 		opacity: 1;
 	}
