@@ -34,7 +34,7 @@ const ageGroupColors = {
 
 function cleanLabel(
 	value: string | null | undefined,
-	fallback = "Non precise",
+	fallback = "Non précisé",
 ) {
 	const raw = value ?? "";
 	const normalized = raw.replace(/\u00a0/g, " ").trim();
@@ -50,13 +50,13 @@ function normalizeCountry(value: string) {
 }
 
 function normalizeClassOrbit(value: string) {
-	const cleaned = cleanLabel(value, "Non precisee");
+	const cleaned = cleanLabel(value, "Non précisée");
 	return cleaned.toUpperCase() === "LEO" ? "LEO" : cleaned;
 }
 
 function normalizeTypeOrbit(value: string) {
-	const cleaned = cleanLabel(value, "Non precisee");
-	return cleaned === "nan" ? "Non precisee" : cleaned;
+	const cleaned = cleanLabel(value, "Non précisée");
+	return cleaned === "nan" ? "Non précisée" : cleaned;
 }
 
 function formatLaunchSiteLabel(site: string) {
@@ -447,7 +447,7 @@ function buildAgeGroups(satellites: NormalizedSatellite[]) {
 		},
 		{
 			id: "mega",
-			label: "Mega-constellations",
+			label: "Méga-constellations",
 			color: ageGroupColors.mega,
 			filter: (satellite: NormalizedSatellite) => satellite.isMegaConstellation,
 		},

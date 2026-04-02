@@ -70,7 +70,7 @@ export function renderOperatorBubbles(
 		.append("svg")
 		.attr("viewBox", `0 0 ${width} ${height}`)
 		.attr("role", "img")
-		.attr("aria-label", "Bulles proportionnelles des operateurs de satellites");
+		.attr("aria-label", "Bulles proportionnelles des opérateurs de satellites");
 
 	const connectorRoot = svg.append("g").attr("class", "operator-connectors");
 
@@ -224,7 +224,7 @@ export function renderOperatorBubbles(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 26)
 		.attr("font-weight", 700)
-		.text("Un quasi-monopole operateur");
+		.text("Un quasi-monopole des opérateurs");
 
 	svg
 		.append("text")
@@ -233,6 +233,6 @@ export function renderOperatorBubbles(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 13)
 		.text(
-			"Surface de chaque bulle proportionnelle a sa part du parc ( % ). Couleurs = pays d'origine.",
+			"Surface de chaque bulle proportionnelle à sa part du parc (%). Couleurs = pays d'origine.",
 		);
 }

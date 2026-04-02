@@ -12,7 +12,7 @@ export const orbitPalette = new Map<string, string>([
 	["MEO", "#e9c46a"],
 	["GEO", "#e76f51"],
 	["Elliptical", "#7a5195"],
-	["Non precisee", "#90a4ae"],
+	["Non précisée", "#90a4ae"],
 ]);
 
 export const usagePalette = new Map<string, string>([

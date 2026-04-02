@@ -86,12 +86,12 @@ export function renderIntroScene(
 			value: `${Math.round(summary.commercialShare * 100)} %`,
 		},
 		{
-			label: "Leader operateur",
+			label: "Leader opérateur",
 			value: `${summary.dominantOperator.name}`,
 			subvalue: `${Math.round(summary.dominantOperator.share * 100)} % de la flotte`,
 		},
 		{
-			label: "Site de lancement no 1",
+			label: "Site de lancement n° 1",
 			value: summary.topLaunchSite.name,
 			subvalue: `${d3.format(",")(summary.topLaunchSite.count).replace(/,/g, " ")} satellites`,
 		},
@@ -148,7 +148,7 @@ export function renderIntroScene(
 		.attr("fill", stagePalette.highlight)
 		.attr("font-size", 15)
 		.attr("letter-spacing", "0.18em")
-		.text("RECIT VISUEL");
+		.text("RÉCIT VISUEL");
 
 	svg
 		.append("text")

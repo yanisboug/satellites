@@ -115,7 +115,7 @@ export function renderContractorBars(
 		.attr("fill", stagePalette.muted)
 		.attr("dominant-baseline", "middle")
 		.attr("font-size", 12)
-		.text((item) => `${Math.round(item.share * 100)} % du marche`);
+		.text((item) => `${Math.round(item.share * 100)} % du marché`);
 
 	svg
 		.append("text")
@@ -124,7 +124,7 @@ export function renderContractorBars(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("Les grands maitres de la fabrication");
+		.text("Les grands maîtres de la fabrication");
 
 	svg
 		.append("text")
@@ -133,7 +133,7 @@ export function renderContractorBars(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Top 5 des contracteurs mondiaux, avec une lecture absolue et relative.",
+			"Top 5 des constructeurs mondiaux, avec une lecture absolue et relative.",
 		);
 
 	const countries = [...new Set(data.map((item) => item.country))];

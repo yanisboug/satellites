@@ -78,7 +78,7 @@ export function renderAgeRidge(
 		.append("svg")
 		.attr("viewBox", `0 0 ${width} ${height}`)
 		.attr("role", "img")
-		.attr("aria-label", "Ridge plot sur l'age des satellites");
+		.attr("aria-label", "Ridge plot sur l'âge des satellites");
 	const root = svg
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -160,7 +160,7 @@ export function renderAgeRidge(
 		.attr("fill", "transparent")
 		.on("pointerenter", (event, group) => {
 			tooltip.show(
-				`<strong>${group.label}</strong><br>Age median: ${group.medianAge.toFixed(1)} ans<br>Duree de vie mediane: ${group.medianLifetime.toFixed(1)} ans<br>Satellites expires: ${Math.round(group.expiredShare * 100)} %<br>Total: ${d3.format(",")(group.total).replace(/,/g, " ")}`,
+				`<strong>${group.label}</strong><br>Âge médian: ${group.medianAge.toFixed(1)} ans<br>Durée de vie médiane: ${group.medianLifetime.toFixed(1)} ans<br>Satellites expirés: ${Math.round(group.expiredShare * 100)} %<br>Total: ${d3.format(",")(group.total).replace(/,/g, " ")}`,
 				event,
 			);
 		})
@@ -183,7 +183,7 @@ export function renderAgeRidge(
 		.attr("text-anchor", "middle")
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 13)
-		.text("Age des satellites actifs (ans)");
+		.text("Âge des satellites actifs (ans)");
 
 	svg
 		.append("text")
@@ -192,7 +192,7 @@ export function renderAgeRidge(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("Des flottes tres jeunes, mais pas toutes au meme rythme");
+		.text("Des flottes très jeunes, mais pas toutes au même rythme");
 
 	svg
 		.append("text")
@@ -201,6 +201,6 @@ export function renderAgeRidge(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Les mega-constellations restent tres recentes, tandis que d'autres categories s'approchent ou depassent leur duree de vie.",
+			"Les méga-constellations restent très récentes, tandis que d'autres catégories s'approchent ou dépassent leur durée de vie.",
 		);
 }

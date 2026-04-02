@@ -50,7 +50,7 @@ function renderBreakdownTooltip(
 	return `
 		<div class="flow-tooltip">
 			<div class="flow-tooltip-title">${escapeHtml(title)}</div>
-			<div class="flow-tooltip-total">${d3.format(",")(total).replace(/,/g, " ")} satellites relies</div>
+			<div class="flow-tooltip-total">${d3.format(",")(total).replace(/,/g, " ")} satellites reliés</div>
 			<div class="flow-tooltip-section">${escapeHtml(sectionLabel)}</div>
 			<div class="flow-tooltip-list">
 				${rows
@@ -82,7 +82,7 @@ export function renderContractorFlow(
 		.attr("role", "img")
 		.attr(
 			"aria-label",
-			"Diagramme de flux entre contracteurs et sites de lancement",
+			"Diagramme de flux entre constructeurs et sites de lancement",
 		);
 	const contractorWidth = getColumnWidth(
 		flow.contractors.map((node) => node.label),
@@ -270,7 +270,7 @@ export function renderContractorFlow(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("Des chaines logistiques fortement concentrees");
+		.text("Des chaînes logistiques fortement concentrées");
 
 	svg
 		.append("text")
@@ -279,7 +279,7 @@ export function renderContractorFlow(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Le survol isole la route habituelle d'un constructeur vers ses bases de lancement preferees.",
+			"Le survol isole la route habituelle d'un constructeur vers ses bases de lancement préférées.",
 		);
 
 	svg
@@ -289,7 +289,7 @@ export function renderContractorFlow(
 		.attr("fill", contractorColor)
 		.attr("font-size", 12)
 		.attr("letter-spacing", "0.14em")
-		.text("CONTRACTEURS");
+		.text("CONSTRUCTEURS");
 
 	svg
 		.append("text")

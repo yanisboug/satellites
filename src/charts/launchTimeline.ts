@@ -211,7 +211,7 @@ export function renderLaunchTimeline(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("Une acceleration recente, tiree par quelques bases");
+		.text("Une accélération récente, tirée par quelques bases");
 
 	svg
 		.append("text")
@@ -220,6 +220,6 @@ export function renderLaunchTimeline(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Les barres suivent les sites dominants; la ligne souligne l'essor des lancements groupes.",
+			"Les barres suivent les sites dominants; la ligne souligne l'essor des lancements groupés.",
 		);
 }

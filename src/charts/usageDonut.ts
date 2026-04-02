@@ -30,7 +30,7 @@ export function renderUsageDonut(
 		.append("svg")
 		.attr("viewBox", `0 0 ${width} ${height}`)
 		.attr("role", "img")
-		.attr("aria-label", "Repartition des satellites selon leur usage");
+		.attr("aria-label", "Répartition des satellites selon leur usage");
 	const stage = svg
 		.append("g")
 		.attr("transform", `translate(${width / 2}, ${height / 2 + 10})`);
@@ -98,7 +98,7 @@ export function renderUsageDonut(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("L'orbite sert d'abord le marche");
+		.text("L'orbite sert d'abord le marché");
 
 	svg
 		.append("text")
@@ -107,6 +107,6 @@ export function renderUsageDonut(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Les usages commerciaux ecrasent largement les segments militaires et mixtes.",
+			"Les usages commerciaux écrasent largement les segments militaires et mixtes.",
 		);
 }

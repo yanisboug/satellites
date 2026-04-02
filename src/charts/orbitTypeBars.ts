@@ -36,7 +36,7 @@ export function renderOrbitTypeBars(
 		.attr("role", "img")
 		.attr(
 			"aria-label",
-			"Barres empilees par type d'orbite et mission commerciale",
+			"Barres empilées par type d'orbite et mission commerciale",
 		);
 	const root = svg
 		.append("g")
@@ -145,7 +145,7 @@ export function renderOrbitTypeBars(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("Les missions commerciales privilegient quelques orbites");
+		.text("Les missions commerciales privilégient quelques orbites");
 
 	svg
 		.append("text")
@@ -154,6 +154,6 @@ export function renderOrbitTypeBars(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Les orbites non polaires inclinees, polaires et heliosynchrones portent l'essentiel du marche.",
+			"Les orbites non polaires inclinées, polaires et héliosynchrones portent l'essentiel du marché.",
 		);
 }

@@ -82,7 +82,7 @@ export function renderOrbitScatter(
 		.attr("y", y(180000))
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 12)
-		.text("apogee = perigee");
+		.text("apogée = périgée");
 
 	const points = root
 		.append("g")
@@ -96,7 +96,7 @@ export function renderOrbitScatter(
 		.attr("fill-opacity", 0.54)
 		.on("pointerenter", (event, item) => {
 			tooltip.show(
-				`<strong>${item.name}</strong><br>${item.classOrbit} / ${item.typeOrbit}<br>Perigee: ${d3.format(",")(item.perigee).replace(/,/g, " ")} km<br>Apogee: ${d3.format(",")(item.apogee).replace(/,/g, " ")} km`,
+				`<strong>${item.name}</strong><br>${item.classOrbit} / ${item.typeOrbit}<br>Périgée: ${d3.format(",")(item.perigee).replace(/,/g, " ")} km<br>Apogée: ${d3.format(",")(item.apogee).replace(/,/g, " ")} km`,
 				event,
 			);
 		})
@@ -148,7 +148,7 @@ export function renderOrbitScatter(
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
-		.text("L'espace est fortement concentre en orbite basse");
+		.text("L'espace est fortement concentré en orbite basse");
 
 	svg
 		.append("text")
@@ -157,7 +157,7 @@ export function renderOrbitScatter(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
-			"Les echelles logarithmiques revelent a la fois l'encombrement LEO et les orbites plus lointaines.",
+			"Les échelles logarithmiques révèlent à la fois l'encombrement LEO et les orbites plus lointaines.",
 		);
 
 	root
@@ -167,7 +167,7 @@ export function renderOrbitScatter(
 		.attr("text-anchor", "middle")
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 13)
-		.text("Perigee (km)");
+		.text("Périgée (km)");
 
 	root
 		.append("text")
@@ -177,5 +177,5 @@ export function renderOrbitScatter(
 		.attr("text-anchor", "middle")
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 13)
-		.text("Apogee (km)");
+		.text("Apogée (km)");
 }
