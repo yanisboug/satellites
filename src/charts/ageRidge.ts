@@ -5,6 +5,7 @@ import { stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
 
 type DensityPoint = [number, number];
+const AGE_CAP = 30;
 
 function gaussianKernel(bandwidth: number) {
 	return (value: number) =>
@@ -30,23 +31,24 @@ export function renderAgeRidge(
 ) {
 	const width = 960;
 	const height = 640;
-	const margin = { top: 110, right: 170, bottom: 70, left: 140 };
+	const margin = { top: 170, right: 188, bottom: 48, left: 140 };
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
-	const maxAge = Math.max(
-		12,
-		Math.ceil(d3.max(data, (item) => d3.max(item.ages) ?? 0) ?? 0),
-	);
-	const domain = d3.range(0, maxAge + 0.25, 0.25);
+	const domain = d3.range(0, AGE_CAP + 0.25, 0.25);
 	const densities = data.map((group) => ({
 		...group,
+		cutoffCount: group.ages.filter((age) => age > AGE_CAP).length,
 		density: kernelDensityEstimator(
 			domain,
 			group.ages,
 			group.id === "mega" ? 0.7 : 1,
 		),
 	}));
-	const x = d3.scaleLinear().domain([0, maxAge]).range([0, innerWidth]);
+	const x = d3
+		.scaleLinear()
+		.domain([0, AGE_CAP])
+		.range([0, innerWidth])
+		.clamp(true);
 	const ridgeScale = d3
 		.scaleLinear()
 		.domain([
@@ -61,7 +63,7 @@ export function renderAgeRidge(
 		.scalePoint<string>()
 		.domain(densities.map((item) => item.label))
 		.range([0, innerHeight])
-		.padding(0.7);
+		.padding(0.18);
 	const area = d3
 		.area<DensityPoint>()
 		.x((point) => x(point[0]))
@@ -103,6 +105,8 @@ export function renderAgeRidge(
 		.call((axis) =>
 			axis
 				.selectAll("text")
+				.attr("dy", "0em")
+				.attr("dominant-baseline", "alphabetic")
 				.attr("fill", stagePalette.text)
 				.attr("font-size", 14),
 		);
@@ -142,6 +146,33 @@ export function renderAgeRidge(
 		.attr("d", (group) => line(group.density));
 
 	groups
+		.filter((group) => group.cutoffCount > 0)
+		.append("line")
+		.attr("x1", x(AGE_CAP))
+		.attr("x2", x(AGE_CAP))
+		.attr("y1", 0)
+		.attr(
+			"y2",
+			(group) => -ridgeScale(group.density[group.density.length - 1]?.[1] ?? 0),
+		)
+		.attr("stroke", "rgba(255,255,255,0.55)")
+		.attr("stroke-width", 1.2)
+		.attr("stroke-dasharray", "3 3");
+
+	groups
+		.filter((group) => group.cutoffCount > 0)
+		.append("circle")
+		.attr("cx", x(AGE_CAP))
+		.attr(
+			"cy",
+			(group) => -ridgeScale(group.density[group.density.length - 1]?.[1] ?? 0),
+		)
+		.attr("r", 3.5)
+		.attr("fill", stagePalette.text)
+		.attr("stroke", (group) => group.color)
+		.attr("stroke-width", 1.5);
+
+	groups
 		.append("line")
 		.attr("x1", (group) => x(group.medianLifetime))
 		.attr("x2", (group) => x(group.medianLifetime))
@@ -159,8 +190,12 @@ export function renderAgeRidge(
 		.attr("height", 120)
 		.attr("fill", "transparent")
 		.on("pointerenter", (event, group) => {
+			const cutoffLine =
+				group.cutoffCount > 0
+					? `<br>Au-delà de ${AGE_CAP} ans: ${d3.format(",")(group.cutoffCount).replace(/,/g, " ")}`
+					: "";
 			tooltip.show(
-				`<strong>${group.label}</strong><br>Âge médian: ${group.medianAge.toFixed(1)} ans<br>Durée de vie médiane: ${group.medianLifetime.toFixed(1)} ans<br>Satellites expirés: ${Math.round(group.expiredShare * 100)} %<br>Total: ${d3.format(",")(group.total).replace(/,/g, " ")}`,
+				`<strong>${group.label}</strong><br>Âge médian: ${group.medianAge.toFixed(1)} ans<br>Durée de vie médiane: ${group.medianLifetime.toFixed(1)} ans<br>Satellites expirés: ${Math.round(group.expiredShare * 100)} %<br>Total: ${d3.format(",")(group.total).replace(/,/g, " ")}${cutoffLine}`,
 				event,
 			);
 		})
@@ -169,26 +204,41 @@ export function renderAgeRidge(
 
 	groups
 		.append("text")
-		.attr("x", innerWidth + 16)
+		.attr("x", innerWidth + 126)
 		.attr("y", -60)
+		.attr("text-anchor", "end")
 		.attr("fill", stagePalette.expired)
 		.attr("font-size", 13)
 		.attr("font-weight", 700)
 		.text((group) => `${Math.round(group.expiredShare * 100)} % hors seuil`);
 
+	groups
+		.filter((group) => group.cutoffCount > 0)
+		.append("text")
+		.attr("x", innerWidth + 126)
+		.attr("y", -40)
+		.attr("text-anchor", "end")
+		.attr("fill", stagePalette.muted)
+		.attr("font-size", 12)
+		.attr("font-weight", 600)
+		.text(
+			(group) =>
+				`${d3.format(",")(group.cutoffCount).replace(/,/g, " ")} au-delà de ${AGE_CAP} ans`,
+		);
+
 	root
 		.append("text")
 		.attr("x", innerWidth / 2)
-		.attr("y", innerHeight + 52)
+		.attr("y", innerHeight + 34)
 		.attr("text-anchor", "middle")
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 13)
-		.text("Âge des satellites actifs (ans)");
+		.text(`Âge des satellites actifs (ans, tronqué à ${AGE_CAP})`);
 
 	svg
 		.append("text")
 		.attr("x", 70)
-		.attr("y", 60)
+		.attr("y", 54)
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
@@ -197,7 +247,7 @@ export function renderAgeRidge(
 	svg
 		.append("text")
 		.attr("x", 70)
-		.attr("y", 92)
+		.attr("y", 86)
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
