@@ -11,7 +11,7 @@ export function renderContractorBars(
 ) {
 	const width = 960;
 	const height = 640;
-	const margin = { top: 86, right: 220, bottom: 48, left: 210 };
+	const margin = { top: 124, right: 280, bottom: 48, left: 210 };
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const x = d3
@@ -120,7 +120,7 @@ export function renderContractorBars(
 	svg
 		.append("text")
 		.attr("x", 70)
-		.attr("y", 60)
+		.attr("y", 54)
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 30)
 		.attr("font-weight", 700)
@@ -129,7 +129,7 @@ export function renderContractorBars(
 	svg
 		.append("text")
 		.attr("x", 70)
-		.attr("y", 92)
+		.attr("y", 86)
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", 15)
 		.text(
@@ -139,7 +139,7 @@ export function renderContractorBars(
 	const countries = [...new Set(data.map((item) => item.country))];
 	const legend = svg
 		.append("g")
-		.attr("transform", `translate(${width - 190}, 170)`);
+		.attr("transform", `translate(${width - 150}, 186)`);
 
 	const updateHighlight = (country: string | null) => {
 		rows
