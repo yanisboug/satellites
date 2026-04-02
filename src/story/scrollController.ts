@@ -69,10 +69,11 @@ export function createScrollController({
 	let lastReportedIndex = -1;
 	let idleTimer: ReturnType<typeof setTimeout> | null = null;
 	let snapRaf = 0;
+	let wheelUnlockTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const IDLE_SNAP_MS = 200;
+	const IDLE_SNAP_MS = 140;
 	const SNAP_DURATION_MS = 420;
-	const WHEEL_SENSITIVITY = 0.0018;
+	const WHEEL_STEP_LOCK_MS = 320;
 
 	let metricsCache = getDepthMetrics();
 
@@ -181,6 +182,13 @@ export function createScrollController({
 		}
 	};
 
+	const releaseWheelLock = () => {
+		if (wheelUnlockTimer !== null) {
+			clearTimeout(wheelUnlockTimer);
+			wheelUnlockTimer = null;
+		}
+	};
+
 	const scheduleIdleSnap = () => {
 		cancelIdleSnap();
 		idleTimer = setTimeout(() => {
@@ -234,7 +242,9 @@ export function createScrollController({
 		}
 		e.preventDefault();
 
-		cancelSnapAnimation();
+		if (wheelUnlockTimer !== null) {
+			return;
+		}
 
 		let delta = e.deltaY;
 		if (e.deltaMode === 1) {
@@ -244,9 +254,14 @@ export function createScrollController({
 			delta *= window.innerHeight;
 		}
 
-		progress = clampProgress(progress + delta * WHEEL_SENSITIVITY);
-		applyContinuousProgress();
-		scheduleIdleSnap();
+		if (delta === 0) {
+			return;
+		}
+
+		discreteStep(delta > 0 ? 1 : -1);
+		wheelUnlockTimer = setTimeout(() => {
+			wheelUnlockTimer = null;
+		}, WHEEL_STEP_LOCK_MS);
 	};
 
 	const onKeyDown = (e: KeyboardEvent) => {
@@ -299,7 +314,7 @@ export function createScrollController({
 		touchTracking = true;
 	};
 
-	const TOUCH_SENSITIVITY = 0.0045;
+	const TOUCH_SENSITIVITY = 0.0065;
 
 	const onTouchMove = (e: TouchEvent) => {
 		if (!touchTracking || isNavMenuOpen() || e.touches.length !== 1) {
@@ -346,6 +361,7 @@ export function createScrollController({
 		destroy() {
 			cancelIdleSnap();
 			cancelSnapAnimation();
+			releaseWheelLock();
 			window.removeEventListener("wheel", onWheel);
 			window.removeEventListener("keydown", onKeyDown);
 			window.removeEventListener("touchstart", onTouchStart);
