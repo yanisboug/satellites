@@ -12,6 +12,30 @@ interface StyleSample {
 	zIndex: number;
 }
 
+const ACTIVE_STYLE: StyleSample = {
+	opacity: 1,
+	tz: 0,
+	scale: 1,
+	blur: 0,
+	zIndex: 2,
+};
+
+const FUTURE_STYLE: StyleSample = {
+	opacity: 0,
+	tz: -220,
+	scale: 0.84,
+	blur: 12,
+	zIndex: 0,
+};
+
+const PAST_STYLE: StyleSample = {
+	opacity: 0,
+	tz: 120,
+	scale: 1.08,
+	blur: 10,
+	zIndex: 1,
+};
+
 function lerp(a: number, b: number, t: number) {
 	return a + (b - a) * t;
 }
@@ -67,42 +91,11 @@ export function createScrollController({
 }: ScrollControllerOptions) {
 	let progress = 0;
 	let lastReportedIndex = -1;
-	let idleTimer: ReturnType<typeof setTimeout> | null = null;
 	let snapRaf = 0;
 	let wheelUnlockTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const IDLE_SNAP_MS = 140;
 	const SNAP_DURATION_MS = 420;
 	const WHEEL_STEP_LOCK_MS = 320;
-
-	let metricsCache = getDepthMetrics();
-
-	function getDepthMetrics() {
-		const narrow = window.matchMedia("(max-width: 600px)").matches;
-		return {
-			active: {
-				opacity: 1,
-				tz: 0,
-				scale: 1,
-				blur: 0,
-				zIndex: 2,
-			} satisfies StyleSample,
-			future: {
-				opacity: 0,
-				tz: narrow ? -140 : -220,
-				scale: narrow ? 0.88 : 0.84,
-				blur: 12,
-				zIndex: 0,
-			} satisfies StyleSample,
-			past: {
-				opacity: 0,
-				tz: narrow ? 80 : 120,
-				scale: narrow ? 1.04 : 1.08,
-				blur: 10,
-				zIndex: 1,
-			} satisfies StyleSample,
-		};
-	}
 
 	const clampProgress = (p: number) => Math.max(0, Math.min(sceneCount - 1, p));
 
@@ -120,7 +113,6 @@ export function createScrollController({
 	};
 
 	const applyContinuousProgress = () => {
-		const { active, future, past } = metricsCache;
 		const p = clampProgress(progress);
 		const n = sceneCount;
 
@@ -129,7 +121,7 @@ export function createScrollController({
 		}
 
 		if (n === 1) {
-			applyLayerStyle(layers[0], active, true);
+			applyLayerStyle(layers[0], ACTIVE_STYLE, true);
 			reportSceneIfNeeded();
 			return;
 		}
@@ -140,18 +132,18 @@ export function createScrollController({
 
 		if (i >= n - 1) {
 			for (let idx = 0; idx < n; idx++) {
-				styles.push(idx < n - 1 ? past : active);
+				styles.push(idx < n - 1 ? PAST_STYLE : ACTIVE_STYLE);
 			}
 		} else {
 			for (let idx = 0; idx < n; idx++) {
 				if (idx < i) {
-					styles.push(past);
+					styles.push(PAST_STYLE);
 				} else if (idx > i + 1) {
-					styles.push(future);
+					styles.push(FUTURE_STYLE);
 				} else if (idx === i) {
-					styles.push(mixStyles(active, past, t));
+					styles.push(mixStyles(ACTIVE_STYLE, PAST_STYLE, t));
 				} else {
-					styles.push(mixStyles(future, active, t));
+					styles.push(mixStyles(FUTURE_STYLE, ACTIVE_STYLE, t));
 				}
 			}
 		}
@@ -168,13 +160,6 @@ export function createScrollController({
 		reportSceneIfNeeded();
 	};
 
-	const cancelIdleSnap = () => {
-		if (idleTimer !== null) {
-			clearTimeout(idleTimer);
-			idleTimer = null;
-		}
-	};
-
 	const cancelSnapAnimation = () => {
 		if (snapRaf !== 0) {
 			cancelAnimationFrame(snapRaf);
@@ -189,18 +174,8 @@ export function createScrollController({
 		}
 	};
 
-	const scheduleIdleSnap = () => {
-		cancelIdleSnap();
-		idleTimer = setTimeout(() => {
-			idleTimer = null;
-			const target = Math.round(clampProgress(progress));
-			startSnapTo(target);
-		}, IDLE_SNAP_MS);
-	};
-
 	const startSnapTo = (targetIndex: number) => {
 		const target = clampProgress(targetIndex);
-		cancelIdleSnap();
 		cancelSnapAnimation();
 
 		const start = progress;
@@ -230,7 +205,6 @@ export function createScrollController({
 	};
 
 	const discreteStep = (delta: number) => {
-		cancelIdleSnap();
 		cancelSnapAnimation();
 		const cur = Math.round(clampProgress(progress));
 		startSnapTo(cur + delta);
@@ -303,48 +277,8 @@ export function createScrollController({
 		}
 	};
 
-	let touchLastY = 0;
-	let touchTracking = false;
-
-	const onTouchStart = (e: TouchEvent) => {
-		if (e.touches.length !== 1) {
-			return;
-		}
-		touchLastY = e.touches[0].clientY;
-		touchTracking = true;
-	};
-
-	const TOUCH_SENSITIVITY = 0.0065;
-
-	const onTouchMove = (e: TouchEvent) => {
-		if (!touchTracking || isNavMenuOpen() || e.touches.length !== 1) {
-			return;
-		}
-		const y = e.touches[0].clientY;
-		const dy = touchLastY - y;
-		touchLastY = y;
-
-		cancelSnapAnimation();
-		progress = clampProgress(progress + dy * TOUCH_SENSITIVITY);
-		applyContinuousProgress();
-		scheduleIdleSnap();
-	};
-
-	const onTouchEnd = () => {
-		touchTracking = false;
-	};
-
-	const onResize = () => {
-		metricsCache = getDepthMetrics();
-		applyContinuousProgress();
-	};
-
 	window.addEventListener("wheel", onWheel, { passive: false });
 	window.addEventListener("keydown", onKeyDown);
-	window.addEventListener("touchstart", onTouchStart, { passive: true });
-	window.addEventListener("touchmove", onTouchMove, { passive: true });
-	window.addEventListener("touchend", onTouchEnd);
-	window.addEventListener("resize", onResize);
 
 	progress = 0;
 	lastReportedIndex = -1;
@@ -355,19 +289,13 @@ export function createScrollController({
 			return Math.round(clampProgress(progress));
 		},
 		goTo(index: number) {
-			cancelIdleSnap();
 			startSnapTo(index);
 		},
 		destroy() {
-			cancelIdleSnap();
 			cancelSnapAnimation();
 			releaseWheelLock();
 			window.removeEventListener("wheel", onWheel);
 			window.removeEventListener("keydown", onKeyDown);
-			window.removeEventListener("touchstart", onTouchStart);
-			window.removeEventListener("touchmove", onTouchMove);
-			window.removeEventListener("touchend", onTouchEnd);
-			window.removeEventListener("resize", onResize);
 		},
 	};
 }

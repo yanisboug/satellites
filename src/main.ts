@@ -233,50 +233,44 @@ async function bootstrap() {
 			},
 		});
 
-		const openMenu = () => {
-			menuPanel.removeAttribute("hidden");
-			menuBackdrop.removeAttribute("hidden");
-			menuToggle.setAttribute("aria-expanded", "true");
-			menuClose.focus();
-		};
-
-		const closeMenu = () => {
-			menuPanel.setAttribute("hidden", "");
-			menuBackdrop.setAttribute("hidden", "");
-			menuToggle.setAttribute("aria-expanded", "false");
-			menuToggle.focus();
+		const isMenuOpen = () => !menuPanel.hasAttribute("hidden");
+		const setMenuOpen = (open: boolean) => {
+			menuPanel.toggleAttribute("hidden", !open);
+			menuBackdrop.toggleAttribute("hidden", !open);
+			menuToggle.setAttribute("aria-expanded", String(open));
+			if (open) {
+				menuClose.focus();
+			} else {
+				menuToggle.focus();
+			}
 		};
 
 		menuToggle.addEventListener("click", () => {
-			if (menuPanel.hasAttribute("hidden")) {
-				openMenu();
-			} else {
-				closeMenu();
-			}
+			setMenuOpen(!isMenuOpen());
 		});
 
 		menuClose.addEventListener("click", () => {
-			closeMenu();
+			setMenuOpen(false);
 		});
 
 		menuBackdrop.addEventListener("click", () => {
-			closeMenu();
+			setMenuOpen(false);
 		});
 
 		menuItemsEls.forEach((item) => {
 			item.addEventListener("click", () => {
 				const index = Number(item.dataset.sceneIndex ?? 0);
 				controller.goTo(index);
-				closeMenu();
+				setMenuOpen(false);
 			});
 		});
 
 		document.addEventListener(
 			"keydown",
 			(e) => {
-				if (e.key === "Escape" && !menuPanel.hasAttribute("hidden")) {
+				if (e.key === "Escape" && isMenuOpen()) {
 					e.preventDefault();
-					closeMenu();
+					setMenuOpen(false);
 				}
 			},
 			true,
@@ -287,10 +281,6 @@ async function bootstrap() {
 				const index = Number(dot.dataset.sceneIndex ?? 0);
 				controller.goTo(index);
 			});
-		});
-
-		window.addEventListener("beforeunload", () => {
-			controller.destroy();
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Erreur inconnue.";
