@@ -1,17 +1,28 @@
 import * as d3 from "d3";
 
 import type { OrbitScatterDatum } from "../types";
+import { styleAxis } from "./axis";
+import {
+	appendAxisLabel,
+	appendChartHeader,
+	chartFrame,
+	chartInteraction,
+	chartMargins,
+	chartTypography,
+} from "./chartFrame";
+import { formatKm } from "./formatters";
+import { appendLegend } from "./legend";
 import { colorFromMap, orbitPalette, stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 export function renderOrbitScatter(
 	container: HTMLElement,
 	data: OrbitScatterDatum[],
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
-	const margin = { top: 92, right: 170, bottom: 86, left: 98 };
+	const { width, height } = chartFrame;
+	const margin = chartMargins.scatter;
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const x = d3.scaleLog().domain([100, 400000]).range([0, innerWidth]);
@@ -35,18 +46,9 @@ export function renderOrbitScatter(
 			d3
 				.axisBottom(x)
 				.tickValues(tickValues)
-				.tickFormat(
-					(value) => `${d3.format(",")(Number(value)).replace(/,/g, " ")} km`,
-				),
+				.tickFormat((value) => formatKm(Number(value))),
 		)
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis));
 
 	root
 		.append("g")
@@ -54,18 +56,9 @@ export function renderOrbitScatter(
 			d3
 				.axisLeft(y)
 				.tickValues(tickValues)
-				.tickFormat(
-					(value) => `${d3.format(",")(Number(value)).replace(/,/g, " ")} km`,
-				),
+				.tickFormat((value) => formatKm(Number(value))),
 		)
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis));
 
 	root
 		.append("line")
@@ -81,7 +74,7 @@ export function renderOrbitScatter(
 		.attr("x", x(120000))
 		.attr("y", y(180000))
 		.attr("fill", stagePalette.muted)
-		.attr("font-size", 12)
+		.attr("font-size", chartTypography.annotation)
 		.text("apogée = périgée");
 
 	const points = root
@@ -96,7 +89,14 @@ export function renderOrbitScatter(
 		.attr("fill-opacity", 0.54)
 		.on("pointerenter", (event, item) => {
 			tooltip.show(
-				`<strong>${item.name}</strong><br>${item.classOrbit} / ${item.typeOrbit}<br>Périgée: ${d3.format(",")(item.perigee).replace(/,/g, " ")} km<br>Apogée: ${d3.format(",")(item.apogee).replace(/,/g, " ")} km`,
+				buildTooltip({
+					title: item.name,
+					subtitle: `${item.classOrbit} / ${item.typeOrbit}`,
+					rows: [
+						{ label: "Périgée", value: formatKm(item.perigee) },
+						{ label: "Apogée", value: formatKm(item.apogee) },
+					],
+				}),
 				event,
 			);
 		})
@@ -104,78 +104,48 @@ export function renderOrbitScatter(
 		.on("pointerleave", () => tooltip.hide());
 
 	const updateHighlight = (orbitClass: string | null) => {
-		points.style("opacity", (item) => {
-			if (!orbitClass) {
-				return 0.82;
-			}
-			return item.classOrbit === orbitClass ? 1 : 0.12;
-		});
+		points
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (item) => {
+				if (!orbitClass) {
+					return chartInteraction.pointIdle;
+				}
+				return item.classOrbit === orbitClass
+					? chartInteraction.idle
+					: chartInteraction.faint;
+			});
 	};
 
 	const legend = svg
 		.append("g")
-		.attr("transform", `translate(${width - 150}, 168)`);
-
-	legend
-		.selectAll("g")
-		.data(classes)
-		.join("g")
-		.attr("transform", (_, index) => `translate(0, ${index * 32})`)
-		.style("cursor", "pointer")
-		.on("pointerenter", (_, orbitClass) => updateHighlight(orbitClass))
-		.on("pointerleave", () => updateHighlight(null))
-		.call((groups) => {
-			groups
-				.append("circle")
-				.attr("cx", 6)
-				.attr("cy", 6)
-				.attr("r", 6)
-				.attr("fill", (orbitClass) => colorFromMap(orbitPalette, orbitClass));
-
-			groups
-				.append("text")
-				.attr("x", 20)
-				.attr("y", 10)
-				.attr("fill", stagePalette.text)
-				.attr("font-size", 13)
-				.text((orbitClass) => orbitClass);
-		});
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 60)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("L'espace est fortement concentré en orbite basse");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 92)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Les échelles logarithmiques révèlent à la fois l'encombrement LEO et les orbites plus lointaines.",
+		.attr(
+			"transform",
+			`translate(${width - 150}, ${chartFrame.contentTop + 32})`,
 		);
 
-	root
-		.append("text")
-		.attr("x", innerWidth / 2)
-		.attr("y", innerHeight + 58)
-		.attr("text-anchor", "middle")
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 13)
-		.text("Périgée (km)");
+	appendLegend(legend, {
+		title: "Classes d'orbite",
+		x: 0,
+		y: 0,
+		items: classes.map((orbitClass) => ({
+			label: orbitClass,
+			color: colorFromMap(orbitPalette, orbitClass),
+			onPointerEnter: () => updateHighlight(orbitClass),
+			onPointerLeave: () => updateHighlight(null),
+		})),
+		rowGap: 32,
+	});
 
-	root
-		.append("text")
-		.attr("transform", "rotate(-90)")
-		.attr("x", -innerHeight / 2)
-		.attr("y", -60)
-		.attr("text-anchor", "middle")
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 13)
-		.text("Apogée (km)");
+	appendChartHeader(
+		svg,
+		"L'espace est fortement concentré en orbite basse",
+		"Les échelles logarithmiques révèlent à la fois l'encombrement LEO et les orbites plus lointaines.",
+	);
+
+	appendAxisLabel(root, "Périgée (km)", innerWidth / 2, innerHeight + 58);
+	appendAxisLabel(root, "Apogée (km)", -innerHeight / 2, -60, {
+		rotate: -90,
+	});
 }

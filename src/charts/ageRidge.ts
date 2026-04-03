@@ -1,8 +1,19 @@
 import * as d3 from "d3";
 
 import type { AgeGroupDatum } from "../types";
+import { styleAxis } from "./axis";
+import {
+	appendAxisLabel,
+	appendChartHeader,
+	chartFrame,
+	chartInteraction,
+	chartMargins,
+	chartTypography,
+} from "./chartFrame";
+import { formatCount, formatDecimal, formatPercent } from "./formatters";
 import { stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 type DensityPoint = [number, number];
 const AGE_CAP = 30;
@@ -29,9 +40,8 @@ export function renderAgeRidge(
 	data: AgeGroupDatum[],
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
-	const margin = { top: 170, right: 188, bottom: 48, left: 140 };
+	const { width, height } = chartFrame;
+	const margin = chartMargins.ridge;
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const domain = d3.range(0, AGE_CAP + 0.25, 0.25);
@@ -89,27 +99,24 @@ export function renderAgeRidge(
 		.append("g")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(d3.axisBottom(x).ticks(8))
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis));
 
 	root
 		.append("g")
 		.call(d3.axisLeft(y).tickSize(0))
-		.call((axis) => axis.select(".domain").remove())
 		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("dy", "0em")
-				.attr("dominant-baseline", "alphabetic")
-				.attr("fill", stagePalette.text)
-				.attr("font-size", 14),
+			styleAxis(axis, {
+				hideDomain: true,
+				hideTickLines: true,
+				fontSize: 14,
+				textColor: stagePalette.text,
+			}),
 		);
+
+	root
+		.selectAll(".tick text")
+		.attr("dy", "0em")
+		.attr("dominant-baseline", "alphabetic");
 
 	const groups = root
 		.selectAll(".ridge")
@@ -190,17 +197,56 @@ export function renderAgeRidge(
 		.attr("height", 120)
 		.attr("fill", "transparent")
 		.on("pointerenter", (event, group) => {
-			const cutoffLine =
+			highlight(group.id);
+			const extraRows =
 				group.cutoffCount > 0
-					? `<br>Au-delà de ${AGE_CAP} ans: ${d3.format(",")(group.cutoffCount).replace(/,/g, " ")}`
-					: "";
+					? [
+							{
+								label: `Au-delà de ${AGE_CAP} ans`,
+								value: formatCount(group.cutoffCount),
+							},
+						]
+					: [];
 			tooltip.show(
-				`<strong>${group.label}</strong><br>Âge médian: ${group.medianAge.toFixed(1)} ans<br>Durée de vie médiane: ${group.medianLifetime.toFixed(1)} ans<br>Satellites expirés: ${Math.round(group.expiredShare * 100)} %<br>Total: ${d3.format(",")(group.total).replace(/,/g, " ")}${cutoffLine}`,
+				buildTooltip({
+					title: group.label,
+					rows: [
+						{
+							label: "Âge médian",
+							value: `${formatDecimal(group.medianAge)} ans`,
+						},
+						{
+							label: "Durée de vie médiane",
+							value: `${formatDecimal(group.medianLifetime)} ans`,
+						},
+						{
+							label: "Satellites expirés",
+							value: formatPercent(group.expiredShare),
+						},
+						{ label: "Total", value: formatCount(group.total) },
+						...extraRows,
+					],
+				}),
 				event,
 			);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", () => {
+			highlight(null);
+			tooltip.hide();
+		});
+
+	function highlight(groupId: string | null) {
+		groups
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (group) =>
+				!groupId || group.id === groupId
+					? chartInteraction.idle
+					: chartInteraction.muted,
+			);
+	}
 
 	groups
 		.append("text")
@@ -208,9 +254,9 @@ export function renderAgeRidge(
 		.attr("y", -60)
 		.attr("text-anchor", "end")
 		.attr("fill", stagePalette.expired)
-		.attr("font-size", 13)
+		.attr("font-size", chartTypography.dataLabel)
 		.attr("font-weight", 700)
-		.text((group) => `${Math.round(group.expiredShare * 100)} % hors seuil`);
+		.text((group) => `${formatPercent(group.expiredShare)} hors seuil`);
 
 	groups
 		.filter((group) => group.cutoffCount > 0)
@@ -219,38 +265,22 @@ export function renderAgeRidge(
 		.attr("y", -40)
 		.attr("text-anchor", "end")
 		.attr("fill", stagePalette.muted)
-		.attr("font-size", 12)
+		.attr("font-size", chartTypography.rowMeta)
 		.attr("font-weight", 600)
 		.text(
-			(group) =>
-				`${d3.format(",")(group.cutoffCount).replace(/,/g, " ")} au-delà de ${AGE_CAP} ans`,
+			(group) => `${formatCount(group.cutoffCount)} au-delà de ${AGE_CAP} ans`,
 		);
 
-	root
-		.append("text")
-		.attr("x", innerWidth / 2)
-		.attr("y", innerHeight + 34)
-		.attr("text-anchor", "middle")
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 13)
-		.text(`Âge des satellites actifs (ans, tronqué à ${AGE_CAP})`);
+	appendAxisLabel(
+		root,
+		`Âge des satellites actifs (ans, tronqué à ${AGE_CAP})`,
+		innerWidth / 2,
+		innerHeight + 34,
+	);
 
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 54)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("Des flottes très jeunes, mais pas toutes au même rythme");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 86)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Les méga-constellations restent très récentes, tandis que d'autres catégories s'approchent ou dépassent leur durée de vie.",
-		);
+	appendChartHeader(
+		svg,
+		"Des flottes très jeunes, mais pas toutes au même rythme",
+		"Les méga-constellations restent très récentes, tandis que d'autres catégories s'approchent ou dépassent leur durée de vie.",
+	);
 }

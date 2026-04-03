@@ -1,17 +1,27 @@
 import * as d3 from "d3";
 
 import type { ContractorDatum } from "../types";
+import { styleAxis } from "./axis";
+import {
+	appendChartHeader,
+	chartFrame,
+	chartInteraction,
+	chartMargins,
+	chartTypography,
+} from "./chartFrame";
+import { formatCompactTick, formatCount, formatPercent } from "./formatters";
+import { appendLegend } from "./legend";
 import { colorFromMap, countryPalette, stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 export function renderContractorBars(
 	container: HTMLElement,
 	data: ContractorDatum[],
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
-	const margin = { top: 124, right: 280, bottom: 48, left: 210 };
+	const { width, height } = chartFrame;
+	const margin = chartMargins.barLegendWide;
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const x = d3
@@ -41,18 +51,9 @@ export function renderContractorBars(
 				.axisTop(x)
 				.ticks(5)
 				.tickSize(-innerHeight)
-				.tickFormat((value) =>
-					d3.format(".2s")(Number(value)).replace("G", "Md"),
-				),
+				.tickFormat((value) => formatCompactTick(Number(value))),
 		)
-		.call((axis) => axis.select(".domain").remove())
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis, { hideDomain: true }));
 
 	const rows = root
 		.selectAll(".contractor-row")
@@ -80,7 +81,13 @@ export function renderContractorBars(
 		)
 		.on("pointerenter", (event, item) => {
 			tooltip.show(
-				`<strong>${item.name}</strong><br>${d3.format(",")(item.count).replace(/,/g, " ")} satellites<br>${Math.round(item.share * 100)} % du parc actif`,
+				buildTooltip({
+					title: item.name,
+					rows: [
+						{ label: "Satellites actifs", value: formatCount(item.count) },
+						{ label: "Part du parc", value: formatPercent(item.share) },
+					],
+				}),
 				event,
 			);
 		})
@@ -94,7 +101,7 @@ export function renderContractorBars(
 		.attr("text-anchor", "end")
 		.attr("dominant-baseline", "middle")
 		.attr("fill", stagePalette.text)
-		.attr("font-size", 16)
+		.attr("font-size", chartTypography.rowLabel)
 		.attr("font-weight", 600)
 		.text((item) => item.name);
 
@@ -104,9 +111,9 @@ export function renderContractorBars(
 		.attr("y", y.bandwidth() / 2 - 8)
 		.attr("fill", stagePalette.text)
 		.attr("dominant-baseline", "middle")
-		.attr("font-size", 15)
+		.attr("font-size", chartTypography.rowValue)
 		.attr("font-weight", 600)
-		.text((item) => d3.format(",")(item.count).replace(/,/g, " "));
+		.text((item) => formatCount(item.count));
 
 	rows
 		.append("text")
@@ -114,78 +121,48 @@ export function renderContractorBars(
 		.attr("y", y.bandwidth() / 2 + 12)
 		.attr("fill", stagePalette.muted)
 		.attr("dominant-baseline", "middle")
-		.attr("font-size", 12)
-		.text((item) => `${Math.round(item.share * 100)} % du marché`);
+		.attr("font-size", chartTypography.rowMeta)
+		.text((item) => `${formatPercent(item.share)} du marché`);
 
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 54)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("Les grands maîtres de la fabrication");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 86)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Top 5 des constructeurs mondiaux, avec une lecture absolue et relative.",
-		);
+	appendChartHeader(
+		svg,
+		"Les grands maîtres de la fabrication",
+		"Top 5 des constructeurs mondiaux, avec une lecture absolue et relative.",
+	);
 
 	const countries = [...new Set(data.map((item) => item.country))];
 	const legend = svg
 		.append("g")
-		.attr("transform", `translate(${width - 150}, 186)`);
+		.attr(
+			"transform",
+			`translate(${width - 150}, ${chartFrame.contentTop + 62})`,
+		);
 
 	const updateHighlight = (country: string | null) => {
 		rows
+			.interrupt()
 			.transition()
-			.duration(180)
+			.duration(chartInteraction.duration)
 			.style("opacity", (item) => {
 				if (!country) {
-					return 1;
+					return chartInteraction.idle;
 				}
-				return item.country === country ? 1 : 0.22;
+				return item.country === country
+					? chartInteraction.idle
+					: chartInteraction.muted;
 			});
 	};
 
-	legend
-		.selectAll("g")
-		.data(countries)
-		.join("g")
-		.attr("transform", (_, index) => `translate(0, ${index * 34})`)
-		.style("cursor", "pointer")
-		.on("pointerenter", (_, country) => updateHighlight(country))
-		.on("pointerleave", () => updateHighlight(null))
-		.call((groups) => {
-			groups
-				.append("circle")
-				.attr("r", 7)
-				.attr("cx", 7)
-				.attr("cy", 7)
-				.attr("fill", (country) =>
-					colorFromMap(countryPalette, country, countryPalette.get("Autre")),
-				);
-
-			groups
-				.append("text")
-				.attr("x", 24)
-				.attr("y", 12)
-				.attr("fill", stagePalette.text)
-				.attr("font-size", 13)
-				.text((country) => country);
-		});
-
-	legend
-		.append("text")
-		.attr("x", 0)
-		.attr("y", -18)
-		.attr("fill", stagePalette.highlight)
-		.attr("font-size", 12)
-		.attr("letter-spacing", "0.12em")
-		.text("PAYS D'ORIGINE");
+	appendLegend(legend, {
+		title: "Pays d'origine",
+		x: 0,
+		y: 0,
+		items: countries.map((country) => ({
+			label: country,
+			color: colorFromMap(countryPalette, country, countryPalette.get("Autre")),
+			onPointerEnter: () => updateHighlight(country),
+			onPointerLeave: () => updateHighlight(null),
+		})),
+		rowGap: 34,
+	});
 }

@@ -41,21 +41,15 @@ body::before {
 	position: fixed;
 	inset: 0;
 	background-image:
-		radial-gradient(
-			circle at 10% 20%,
+		radial-gradient(circle at 10% 20%,
 			rgba(255, 255, 255, 0.08) 0 1px,
-			transparent 1px
-		),
-		radial-gradient(
-			circle at 70% 30%,
+			transparent 1px),
+		radial-gradient(circle at 70% 30%,
 			rgba(255, 255, 255, 0.06) 0 1px,
-			transparent 1px
-		),
-		radial-gradient(
-			circle at 30% 80%,
+			transparent 1px),
+		radial-gradient(circle at 30% 80%,
 			rgba(255, 255, 255, 0.04) 0 1px,
-			transparent 1px
-		);
+			transparent 1px);
 	background-size:
 		220px 220px,
 		300px 300px,
@@ -506,6 +500,7 @@ select {
 }
 
 @keyframes hint-pulse {
+
 	0%,
 	100% {
 		opacity: 0.5;
@@ -537,6 +532,63 @@ select {
 
 .viz-tooltip[data-visible="true"] {
 	opacity: 1;
+}
+
+.chart-tooltip {
+	display: grid;
+	gap: 8px;
+}
+
+.chart-tooltip-title {
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--text);
+}
+
+.chart-tooltip-subtitle {
+	color: var(--muted);
+	font-size: 0.84rem;
+	line-height: 1.35;
+}
+
+.chart-tooltip-rows {
+	display: grid;
+	gap: 6px;
+}
+
+.chart-tooltip-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: start;
+}
+
+.chart-tooltip-label {
+	color: var(--muted);
+	line-height: 1.3;
+}
+
+.chart-tooltip-value {
+	color: var(--text);
+	font-weight: 600;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.chart-tooltip-section {
+	display: grid;
+	gap: 6px;
+	padding-top: 6px;
+	border-top: 1px solid rgba(125, 211, 252, 0.1);
+}
+
+.chart-tooltip-section-title {
+	color: var(--accent);
+	font-size: 0.76rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 }
 
 .flow-tooltip {
@@ -587,85 +639,4 @@ select {
 	color: var(--accent);
 	font-weight: 700;
 	white-space: nowrap;
-}
-
-/* ---------- Responsive ---------- */
-
-@media (max-width: 900px) {
-	.scene-layer--split {
-		padding: 76px 16px 100px;
-	}
-
-	.scene-layout {
-		width: min(100%, 960px);
-		grid-template-columns: 1fr;
-		gap: 18px;
-	}
-
-	.scene-layer--split .scene-viz {
-		order: 1;
-		justify-content: center;
-	}
-
-	.scene-layer--split .scene-copy {
-		order: 2;
-		left: auto;
-		right: auto;
-		bottom: auto;
-		max-width: none;
-	}
-
-	.scene-copy {
-		left: 16px;
-		right: 16px;
-		bottom: 72px;
-		max-width: none;
-	}
-
-	.scene-viz {
-		padding: 44px 12px 46%;
-	}
-
-	.scene-viz svg {
-		max-width: calc(100vw - 24px);
-		max-height: min(52vh, calc(100dvh - 240px));
-	}
-
-	.scene-layer--split .scene-viz svg {
-		max-width: min(100%, 960px);
-		max-height: min(52vh, calc(100dvh - 240px));
-	}
-}
-
-@media (max-width: 600px) {
-	.scene-layer--split {
-		padding: 72px 10px 100px;
-	}
-
-	.scene-copy {
-		left: 10px;
-		right: 10px;
-		bottom: 66px;
-		padding: 16px 18px;
-		border-radius: 18px;
-		gap: 8px;
-	}
-
-	.scene-copy h2 {
-		font-size: 1.2rem;
-	}
-
-	.scene-viz {
-		padding: 42px 8px 50%;
-	}
-
-	.scene-viz svg {
-		max-width: calc(100vw - 16px);
-		max-height: min(48vh, calc(100dvh - 260px));
-	}
-
-	.scene-layer--split .scene-viz svg {
-		max-width: min(100%, 960px);
-		max-height: min(46vh, calc(100dvh - 260px));
-	}
 }

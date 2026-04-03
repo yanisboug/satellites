@@ -1,8 +1,18 @@
 import * as d3 from "d3";
 
 import type { ClusterMetric, YearSiteDatum } from "../types";
+import { styleAxis } from "./axis";
+import {
+	appendChartHeader,
+	chartFrame,
+	chartInteraction,
+	chartMargins,
+} from "./chartFrame";
+import { formatCount, formatDecimal } from "./formatters";
+import { appendLegend } from "./legend";
 import { stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 interface LaunchTimelineData {
 	sites: string[];
@@ -15,9 +25,8 @@ export function renderLaunchTimeline(
 	timeline: LaunchTimelineData,
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
-	const margin = { top: 96, right: 90, bottom: 66, left: 78 };
+	const { width, height } = chartFrame;
+	const margin = chartMargins.timeline;
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const years = [...new Set(timeline.data.map((item) => item.year))].sort(
@@ -78,41 +87,20 @@ export function renderLaunchTimeline(
 		.append("g")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(d3.axisBottom(x).tickValues(years.filter((year) => year >= 2000)))
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis));
 
 	root
 		.append("g")
 		.call(d3.axisLeft(y).ticks(5))
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis));
 
 	root
 		.append("g")
 		.attr("transform", `translate(${innerWidth}, 0)`)
 		.call(d3.axisRight(clusterScale).ticks(4))
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.highlight)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis, { textColor: stagePalette.highlight }));
 
-	root
+	const bars = root
 		.selectAll(".launch-series")
 		.data(series)
 		.join("g")
@@ -125,14 +113,22 @@ export function renderLaunchTimeline(
 		.attr("width", x.bandwidth())
 		.attr("height", (item) => y(item[0]) - y(item[1]))
 		.on("pointerenter", (event, item) => {
+			highlightSite(item.key);
 			const count = item.data[item.key] ?? 0;
 			tooltip.show(
-				`<strong>${siteLabels.get(item.key) ?? item.key}</strong><br>${item.data.year}<br>${d3.format(",")(count).replace(/,/g, " ")} satellites`,
+				buildTooltip({
+					title: siteLabels.get(item.key) ?? item.key,
+					subtitle: `${item.data.year}`,
+					rows: [{ label: "Satellites", value: formatCount(count) }],
+				}),
 				event,
 			);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", () => {
+			highlightSite(null);
+			tooltip.hide();
+		});
 
 	const line = d3
 		.line<ClusterMetric>()
@@ -140,7 +136,7 @@ export function renderLaunchTimeline(
 		.y((item) => clusterScale(item.avgSatellitesPerLaunchDate))
 		.curve(d3.curveMonotoneX);
 
-	root
+	const clusterPath = root
 		.append("path")
 		.datum(timeline.clusters.filter((item) => item.year >= years[0]))
 		.attr("fill", "none")
@@ -148,7 +144,7 @@ export function renderLaunchTimeline(
 		.attr("stroke-width", 3)
 		.attr("d", line);
 
-	root
+	const clusterPoints = root
 		.selectAll(".cluster-point")
 		.data(timeline.clusters)
 		.join("circle")
@@ -158,68 +154,91 @@ export function renderLaunchTimeline(
 		.attr("r", 4.5)
 		.attr("fill", stagePalette.highlight)
 		.on("pointerenter", (event, item) => {
+			highlightCluster(true);
 			tooltip.show(
-				`<strong>${item.year}</strong><br>${item.avgSatellitesPerLaunchDate.toFixed(1)} satellites par date de lancement<br>Pic journalier: ${item.maxSatellitesOnSingleDate}`,
+				buildTooltip({
+					title: `${item.year}`,
+					rows: [
+						{
+							label: "Satellites / date",
+							value: formatDecimal(item.avgSatellitesPerLaunchDate),
+						},
+						{
+							label: "Pic journalier",
+							value: formatCount(item.maxSatellitesOnSingleDate),
+						},
+					],
+				}),
 				event,
 			);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", () => {
+			highlightCluster(false);
+			tooltip.hide();
+		});
 
-	const legend = svg.append("g").attr("transform", "translate(620, 122)");
+	function highlightSite(site: string | null) {
+		bars
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (item) =>
+				!site || item.key === site
+					? chartInteraction.idle
+					: chartInteraction.muted,
+			);
+	}
 
-	timeline.sites.forEach((site, index) => {
-		const group = legend
-			.append("g")
-			.attr("transform", `translate(0, ${index * 28})`);
-		group
-			.append("rect")
-			.attr("width", 14)
-			.attr("height", 14)
-			.attr("rx", 4)
-			.attr("fill", color(site));
-		group
-			.append("text")
-			.attr("x", 22)
-			.attr("y", 11)
-			.attr("fill", stagePalette.text)
-			.attr("font-size", 12)
-			.text(siteLabels.get(site) ?? site);
+	function highlightCluster(active: boolean) {
+		clusterPath
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style(
+				"opacity",
+				active ? chartInteraction.active : chartInteraction.idle,
+			);
+
+		clusterPoints
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style(
+				"opacity",
+				active ? chartInteraction.active : chartInteraction.idle,
+			);
+	}
+
+	const legend = svg
+		.append("g")
+		.attr("transform", `translate(620, ${chartFrame.contentTop - 14})`);
+
+	appendLegend(legend, {
+		x: 0,
+		y: 0,
+		title: "Sites et rythme",
+		items: [
+			...timeline.sites.map((site) => ({
+				label: siteLabels.get(site) ?? site,
+				color: color(site),
+				marker: { type: "rect" as const },
+				onPointerEnter: () => highlightSite(site),
+				onPointerLeave: () => highlightSite(null),
+			})),
+			{
+				label: "Satellites par date de lancement",
+				color: stagePalette.highlight,
+				marker: { type: "line" as const },
+				onPointerEnter: () => highlightCluster(true),
+				onPointerLeave: () => highlightCluster(false),
+			},
+		],
 	});
 
-	legend
-		.append("line")
-		.attr("x1", 0)
-		.attr("x2", 18)
-		.attr("y1", timeline.sites.length * 28 + 12)
-		.attr("y2", timeline.sites.length * 28 + 12)
-		.attr("stroke", stagePalette.highlight)
-		.attr("stroke-width", 3);
-
-	legend
-		.append("text")
-		.attr("x", 24)
-		.attr("y", timeline.sites.length * 28 + 16)
-		.attr("fill", stagePalette.highlight)
-		.attr("font-size", 12)
-		.text("Satellites par date de lancement");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 60)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("Une accélération récente, tirée par quelques bases");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 92)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Les barres suivent les sites dominants; la ligne souligne l'essor des lancements groupés.",
-		);
+	appendChartHeader(
+		svg,
+		"Une accélération récente, tirée par quelques bases",
+		"Les barres suivent les sites dominants; la ligne souligne l'essor des lancements groupés.",
+	);
 }

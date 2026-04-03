@@ -1,8 +1,17 @@
 import * as d3 from "d3";
 
 import type { FlowLinkDatum, FlowNodeDatum } from "../types";
+import {
+	appendChartHeader,
+	appendSectionLabel,
+	chartFrame,
+	chartInteraction,
+	chartTypography,
+} from "./chartFrame";
+import { formatCount } from "./formatters";
 import { stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 interface FlowData {
 	contractors: FlowNodeDatum[];
@@ -33,48 +42,12 @@ function getColumnWidth(labels: string[]) {
 	return Math.max(156, Math.min(340, widestLabel + 36));
 }
 
-function escapeHtml(text: string) {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
-}
-
-function renderBreakdownTooltip(
-	title: string,
-	total: number,
-	sectionLabel: string,
-	rows: { label: string; value: number }[],
-) {
-	return `
-		<div class="flow-tooltip">
-			<div class="flow-tooltip-title">${escapeHtml(title)}</div>
-			<div class="flow-tooltip-total">${d3.format(",")(total).replace(/,/g, " ")} satellites reliés</div>
-			<div class="flow-tooltip-section">${escapeHtml(sectionLabel)}</div>
-			<div class="flow-tooltip-list">
-				${rows
-					.map(
-						(row) => `
-							<div class="flow-tooltip-row">
-								<span class="flow-tooltip-label">${escapeHtml(row.label)}</span>
-								<span class="flow-tooltip-value">${d3.format(",")(row.value).replace(/,/g, " ")}</span>
-							</div>
-						`,
-					)
-					.join("")}
-			</div>
-		</div>
-	`;
-}
-
 export function renderContractorFlow(
 	container: HTMLElement,
 	flow: FlowData,
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
+	const { width, height } = chartFrame;
 	const svg = d3
 		.select(container)
 		.append("svg")
@@ -95,13 +68,13 @@ export function renderContractorFlow(
 	const contractorNodes = flow.contractors.map((node, index) => ({
 		...node,
 		x: contractorX,
-		y: 150 + index * 72,
+		y: chartFrame.contentTop + 24 + index * 72,
 		width: contractorWidth,
 	}));
 	const siteNodes = flow.sites.map((node, index) => ({
 		...node,
 		x: siteX,
-		y: 150 + index * 72,
+		y: chartFrame.contentTop + 24 + index * 72,
 		width: siteWidth,
 	}));
 	const nodeLookup = new Map<string, PositionedNode>(
@@ -111,8 +84,6 @@ export function renderContractorFlow(
 		.scaleSqrt()
 		.domain([0, d3.max(flow.links, (item) => item.value) ?? 0])
 		.range([2, 18]);
-	const formatCount = (value: number) =>
-		d3.format(",")(value).replace(/,/g, " ");
 
 	const getNodeBreakdown = (node: PositionedNode) => {
 		const relatedLinks = flow.links
@@ -135,14 +106,22 @@ export function renderContractorFlow(
 			return "";
 		}
 
-		return renderBreakdownTooltip(
-			node.label,
-			node.value,
-			node.side === "contractor"
-				? "Vers les sites de lancement"
-				: "Satellites fournis par",
-			relatedLinks,
-		);
+		return buildTooltip({
+			title: node.label,
+			subtitle: `${formatCount(node.value)} satellites reliés`,
+			sections: [
+				{
+					label:
+						node.side === "contractor"
+							? "Vers les sites de lancement"
+							: "Satellites fournis par",
+					rows: relatedLinks.map((link) => ({
+						label: link.label,
+						value: formatCount(link.value),
+					})),
+				},
+			],
+		});
 	};
 	const contractorColor = "#2a9d8f";
 	const siteColor = "#457b9d";
@@ -162,20 +141,30 @@ export function renderContractorFlow(
 
 		linkGroup
 			.selectAll<SVGPathElement, FlowLinkDatum>("path")
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
 			.style("opacity", (link) => {
 				if (!nodeId) {
-					return 0.55;
+					return chartInteraction.lineIdle;
 				}
-				return link.source === nodeId || link.target === nodeId ? 0.95 : 0.08;
+				return link.source === nodeId || link.target === nodeId
+					? chartInteraction.active
+					: chartInteraction.lineMuted;
 			});
 
 		nodeGroup
 			.selectAll<SVGGElement, PositionedNode>("g")
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
 			.style("opacity", (node) => {
 				if (!nodeId) {
-					return 1;
+					return chartInteraction.idle;
 				}
-				return node.id === nodeId || connectedNodeIds.has(node.id) ? 1 : 0.22;
+				return node.id === nodeId || connectedNodeIds.has(node.id)
+					? chartInteraction.idle
+					: chartInteraction.muted;
 			});
 	};
 
@@ -205,7 +194,12 @@ export function renderContractorFlow(
 			const targetLabel = nodeLookup.get(link.target)?.label ?? link.target;
 			highlight(link.source);
 			tooltip.show(
-				`<strong>${escapeHtml(sourceLabel)}</strong> → <strong>${escapeHtml(targetLabel)}</strong><br>${formatCount(link.value)} satellites`,
+				buildTooltip({
+					title: `${sourceLabel} -> ${targetLabel}`,
+					rows: [
+						{ label: "Satellites reliés", value: formatCount(link.value) },
+					],
+				}),
 				event,
 			);
 		})
@@ -255,7 +249,7 @@ export function renderContractorFlow(
 			.attr("text-anchor", "middle")
 			.attr("dominant-baseline", "middle")
 			.attr("fill", stagePalette.text)
-			.attr("font-size", 12.5)
+			.attr("font-size", chartTypography.legendLabel)
 			.attr("font-weight", 600)
 			.text((node) => node.label);
 	};
@@ -263,40 +257,28 @@ export function renderContractorFlow(
 	renderNodes(contractorNodes, contractorColor);
 	renderNodes(siteNodes, siteColor);
 
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 60)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("Des chaînes logistiques fortement concentrées");
+	appendChartHeader(
+		svg,
+		"Des chaînes logistiques fortement concentrées",
+		"Le survol isole la route habituelle d'un constructeur vers ses bases de lancement préférées.",
+	);
 
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 92)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Le survol isole la route habituelle d'un constructeur vers ses bases de lancement préférées.",
-		);
-
-	svg
-		.append("text")
-		.attr("x", contractorLeft)
-		.attr("y", 126)
-		.attr("fill", contractorColor)
-		.attr("font-size", 12)
-		.attr("letter-spacing", "0.14em")
-		.text("CONSTRUCTEURS");
-
-	svg
-		.append("text")
-		.attr("x", siteRight - siteWidth)
-		.attr("y", 126)
-		.attr("fill", siteColor)
-		.attr("font-size", 12)
-		.attr("letter-spacing", "0.14em")
-		.text("SITES");
+	appendSectionLabel(
+		svg,
+		"Constructeurs",
+		contractorLeft,
+		chartFrame.contentTop,
+		{
+			fill: contractorColor,
+		},
+	);
+	appendSectionLabel(
+		svg,
+		"Sites",
+		siteRight - siteWidth,
+		chartFrame.contentTop,
+		{
+			fill: siteColor,
+		},
+	);
 }

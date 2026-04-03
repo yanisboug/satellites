@@ -1,8 +1,17 @@
 import * as d3 from "d3";
 
 import type { OperatorDatum } from "../types";
+import {
+	appendChartHeader,
+	chartFrame,
+	chartInteraction,
+	chartTypography,
+} from "./chartFrame";
+import { formatCount, formatPercent } from "./formatters";
+import { appendLegend } from "./legend";
 import { colorFromMap, countryPalette, stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 interface BubbleNode extends OperatorDatum {
 	r: number;
@@ -27,8 +36,7 @@ export function renderOperatorBubbles(
 	data: OperatorDatum[],
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
+	const { width, height } = chartFrame;
 	const bubbleData = data.slice(0, 10);
 	const countries = [...new Set(bubbleData.map((item) => item.country))];
 	const maxShare = d3.max(bubbleData, (item) => item.share) ?? 0.001;
@@ -51,7 +59,7 @@ export function renderOperatorBubbles(
 		packedNodes.flatMap((item) => [item.y - item.r, item.y + item.r]),
 	) as [number, number];
 	const packCenterX = 340;
-	const packCenterY = 304;
+	const packCenterY = chartFrame.contentTop + 176;
 	const offsetX = packCenterX - (extentX[0] + extentX[1]) / 2;
 	const offsetY = packCenterY - (extentY[0] + extentY[1]) / 2;
 	const nodes: BubbleNode[] = packedNodes.map((item) => ({
@@ -61,9 +69,9 @@ export function renderOperatorBubbles(
 	}));
 
 	const listX = 618;
-	const legendX = 48;
-	const legendTop = 126;
-	const listTop = 182;
+	const legendX = chartFrame.headerX;
+	const legendTop = chartFrame.contentTop + 2;
+	const listTop = chartFrame.contentTop + 58;
 	const listRowH = 34;
 	const listAnchorX = listX + 7;
 	const listAnchorY = (index: number) => listTop + index * listRowH + 12;
@@ -79,7 +87,7 @@ export function renderOperatorBubbles(
 
 	const stage = svg.append("g").attr("transform", "translate(0, 0)");
 
-	const pctFmt = (share: number) => `${Math.round(share * 100)} %`;
+	const pctFmt = (share: number) => formatPercent(share);
 
 	const connectorSelection = connectorRoot
 		.selectAll<SVGLineElement, BubbleNode>(".operator-connector")
@@ -114,7 +122,13 @@ export function renderOperatorBubbles(
 		.on("pointerenter", (event, item) => {
 			highlight(item.name);
 			tooltip.show(
-				`<strong>${item.name}</strong><br>${d3.format(",")(item.count).replace(/,/g, " ")} satellites<br>${pctFmt(item.share)} du parc actif`,
+				buildTooltip({
+					title: item.name,
+					rows: [
+						{ label: "Satellites actifs", value: formatCount(item.count) },
+						{ label: "Part du parc", value: pctFmt(item.share) },
+					],
+				}),
 				event,
 			);
 		})
@@ -145,7 +159,13 @@ export function renderOperatorBubbles(
 		.on("pointerenter", (event, item) => {
 			highlight(item.name);
 			tooltip.show(
-				`<strong>${item.name}</strong><br>${d3.format(",")(item.count).replace(/,/g, " ")} satellites<br>${pctFmt(item.share)} du parc actif`,
+				buildTooltip({
+					title: item.name,
+					rows: [
+						{ label: "Satellites actifs", value: formatCount(item.count) },
+						{ label: "Part du parc", value: pctFmt(item.share) },
+					],
+				}),
 				event,
 			);
 		})
@@ -159,81 +179,71 @@ export function renderOperatorBubbles(
 		.append("g")
 		.attr("transform", `translate(${legendX}, ${legendTop})`);
 
-	legend
-		.append("text")
-		.attr("x", 0)
-		.attr("y", -18)
-		.attr("fill", stagePalette.highlight)
-		.attr("font-size", 12)
-		.attr("letter-spacing", "0.12em")
-		.text("PAYS D'ORIGINE");
-
-	legend
-		.selectAll<SVGGElement, string>("g")
-		.data(countries)
-		.join("g")
-		.attr("transform", (_, index) => `translate(0, ${index * 28})`)
-		.style("cursor", "pointer")
-		.on("pointerenter", (_, country) => highlight(null, country))
-		.on("pointerleave", () => highlight(null, null))
-		.call((groups) => {
-			groups
-				.append("circle")
-				.attr("cx", 7)
-				.attr("cy", 7)
-				.attr("r", 7)
-				.attr("fill", (country) => operatorColor(country));
-
-			groups
-				.append("text")
-				.attr("x", 22)
-				.attr("y", 12)
-				.attr("fill", stagePalette.text)
-				.attr("font-size", 13)
-				.text((country) => country);
-		});
+	appendLegend(legend, {
+		title: "Pays d'origine",
+		x: 0,
+		y: 0,
+		items: countries.map((country) => ({
+			label: country,
+			color: operatorColor(country),
+			onPointerEnter: () => highlight(null, country),
+			onPointerLeave: () => highlight(null, null),
+		})),
+	});
 
 	function highlight(name: string | null, country: string | null = null) {
 		bubbleGroups
 			.interrupt()
 			.transition()
-			.duration(220)
+			.duration(chartInteraction.duration)
 			.style("opacity", (item) => {
 				if (name) {
-					return item.name === name ? 1 : 0.18;
+					return item.name === name
+						? chartInteraction.idle
+						: chartInteraction.muted;
 				}
 				if (country) {
-					return item.country === country ? 1 : 0.14;
+					return item.country === country
+						? chartInteraction.idle
+						: chartInteraction.faint;
 				}
-				return 1;
+				return chartInteraction.idle;
 			});
 
 		list
 			.interrupt()
 			.transition()
-			.duration(220)
+			.duration(chartInteraction.duration)
 			.style("opacity", (item) => {
 				if (name) {
-					return item.name === name ? 1 : 0.28;
+					return item.name === name
+						? chartInteraction.idle
+						: chartInteraction.softMuted;
 				}
 				if (country) {
-					return item.country === country ? 1 : 0.18;
+					return item.country === country
+						? chartInteraction.idle
+						: chartInteraction.muted;
 				}
-				return 1;
+				return chartInteraction.idle;
 			});
 
 		connectorSelection
 			.interrupt()
 			.transition()
-			.duration(220)
+			.duration(chartInteraction.duration)
 			.style("opacity", (item) => {
 				if (name) {
-					return item.name === name ? 0.9 : 0.08;
+					return item.name === name
+						? chartInteraction.active
+						: chartInteraction.lineMuted;
 				}
 				if (country) {
-					return item.country === country ? 0.9 : 0.06;
+					return item.country === country
+						? chartInteraction.active
+						: chartInteraction.lineFaint;
 				}
-				return 0.55;
+				return chartInteraction.lineIdle;
 			});
 	}
 
@@ -261,7 +271,7 @@ export function renderOperatorBubbles(
 		.attr("x", 22)
 		.attr("y", 16)
 		.attr("fill", stagePalette.text)
-		.attr("font-size", 11)
+		.attr("font-size", chartTypography.listLabel)
 		.attr("font-weight", 600)
 		.text((item) => truncateName(item.name, 24));
 
@@ -271,26 +281,13 @@ export function renderOperatorBubbles(
 		.attr("y", 16)
 		.attr("text-anchor", "end")
 		.attr("fill", stagePalette.muted)
-		.attr("font-size", 11)
+		.attr("font-size", chartTypography.listLabel)
 		.attr("font-weight", 600)
 		.text((item) => pctFmt(item.share));
 
-	svg
-		.append("text")
-		.attr("x", 48)
-		.attr("y", 52)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 26)
-		.attr("font-weight", 700)
-		.text("Un quasi-monopole des opérateurs");
-
-	svg
-		.append("text")
-		.attr("x", 48)
-		.attr("y", 80)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 13)
-		.text(
-			"Surface de chaque bulle proportionnelle à sa part du parc (%). Couleur = pays d'origine. Survolez la légende pour filtrer.",
-		);
+	appendChartHeader(
+		svg,
+		"Un quasi-monopole des opérateurs",
+		"Surface de chaque bulle proportionnelle à sa part du parc (%). Couleur = pays d'origine. Survolez la légende pour filtrer.",
+	);
 }

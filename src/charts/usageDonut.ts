@@ -1,16 +1,24 @@
 import * as d3 from "d3";
 
 import type { ShareDatum } from "../types";
+import {
+	appendChartHeader,
+	appendSectionLabel,
+	chartFrame,
+	chartInteraction,
+	chartTypography,
+} from "./chartFrame";
+import { formatCount, formatPercent } from "./formatters";
 import { colorFromMap, stagePalette, usagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 export function renderUsageDonut(
 	container: HTMLElement,
 	data: ShareDatum[],
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
+	const { width, height } = chartFrame;
 	const radius = 184;
 	const pie = d3
 		.pie<ShareDatum>()
@@ -33,9 +41,9 @@ export function renderUsageDonut(
 		.attr("aria-label", "Répartition des satellites selon leur usage");
 	const stage = svg
 		.append("g")
-		.attr("transform", `translate(${width / 2}, ${height / 2 + 10})`);
+		.attr("transform", `translate(${width / 2}, ${height / 2 + 16})`);
 
-	stage
+	const slices = stage
 		.selectAll("path")
 		.data(arcs)
 		.join("path")
@@ -44,15 +52,25 @@ export function renderUsageDonut(
 		.attr("stroke", "#081120")
 		.attr("stroke-width", 2)
 		.on("pointerenter", (event, item) => {
+			highlight(item.data.label);
 			tooltip.show(
-				`<strong>${item.data.label}</strong><br>${d3.format(",")(item.data.count).replace(/,/g, " ")} satellites<br>${Math.round(item.data.share * 100)} % du total`,
+				buildTooltip({
+					title: item.data.label,
+					rows: [
+						{ label: "Satellites", value: formatCount(item.data.count) },
+						{ label: "Part du total", value: formatPercent(item.data.share) },
+					],
+				}),
 				event,
 			);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", () => {
+			highlight(null);
+			tooltip.hide();
+		});
 
-	stage
+	const labels = stage
 		.selectAll(".donut-label")
 		.data(arcs)
 		.join("text")
@@ -60,53 +78,54 @@ export function renderUsageDonut(
 		.attr("transform", (item) => `translate(${labelArc.centroid(item)})`)
 		.attr("text-anchor", "middle")
 		.attr("fill", stagePalette.text)
-		.attr("font-size", 13)
+		.attr("font-size", chartTypography.dataLabel)
 		.attr("font-weight", 600)
-		.text(
-			(item) => `${item.data.label} ${Math.round(item.data.share * 100)} %`,
-		);
+		.text((item) => `${item.data.label} ${formatPercent(item.data.share)}`);
 
-	stage
-		.append("text")
-		.attr("text-anchor", "middle")
-		.attr("y", -10)
-		.attr("fill", stagePalette.highlight)
-		.attr("font-size", 15)
-		.text("USAGES");
+	function highlight(label: string | null) {
+		slices
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (item) =>
+				!label || item.data.label === label
+					? chartInteraction.idle
+					: chartInteraction.muted,
+			);
+
+		labels
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (item) =>
+				!label || item.data.label === label
+					? chartInteraction.idle
+					: chartInteraction.softMuted,
+			);
+	}
+
+	appendSectionLabel(stage, "Usages", 0, -10, { anchor: "middle" });
 
 	stage
 		.append("text")
 		.attr("text-anchor", "middle")
 		.attr("y", 24)
 		.attr("fill", stagePalette.text)
-		.attr("font-size", 44)
+		.attr("font-size", chartTypography.centerValue)
 		.attr("font-weight", 700)
-		.text(`${Math.round(data[0]?.share ? data[0].share * 100 : 0)} %`);
+		.text(formatPercent(data[0]?.share ?? 0));
 
 	stage
 		.append("text")
 		.attr("text-anchor", "middle")
 		.attr("y", 52)
 		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
+		.attr("font-size", chartTypography.centerCaption)
 		.text("de la flotte est d'abord commerciale");
 
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 60)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("L'orbite sert d'abord le marché");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 92)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Les usages commerciaux écrasent largement les segments militaires et mixtes.",
-		);
+	appendChartHeader(
+		svg,
+		"L'orbite sert d'abord le marché",
+		"Les usages commerciaux écrasent largement les segments militaires et mixtes.",
+	);
 }

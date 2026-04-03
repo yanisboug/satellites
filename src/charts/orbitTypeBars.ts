@@ -1,12 +1,22 @@
 import * as d3 from "d3";
 
 import type { OrbitMissionDatum } from "../types";
+import { styleAxis } from "./axis";
+import {
+	appendChartHeader,
+	chartFrame,
+	chartInteraction,
+	chartMargins,
+	chartTypography,
+} from "./chartFrame";
+import { formatCompactTick, formatCount, formatPercent } from "./formatters";
+import { appendLegend } from "./legend";
 import { stagePalette } from "./palette";
 import type { TooltipController } from "./tooltip";
+import { buildTooltip } from "./tooltipContent";
 
 const BAR_RADIUS = 12;
 
-/** Horizontal bar with optional rounding only on the left and/or right (for clean stacked joins). */
 function horizontalStackSegmentPath(
 	x0: number,
 	x1: number,
@@ -70,9 +80,8 @@ export function renderOrbitTypeBars(
 	data: OrbitMissionDatum[],
 	tooltip: TooltipController,
 ) {
-	const width = 960;
-	const height = 640;
-	const margin = { top: 96, right: 130, bottom: 64, left: 220 };
+	const { width, height } = chartFrame;
+	const margin = chartMargins.stackedBars;
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const y = d3
@@ -106,12 +115,13 @@ export function renderOrbitTypeBars(
 	root
 		.append("g")
 		.call(d3.axisLeft(y).tickSize(0))
-		.call((axis) => axis.select(".domain").remove())
 		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.text)
-				.attr("font-size", 14),
+			styleAxis(axis, {
+				hideDomain: true,
+				hideTickLines: true,
+				fontSize: 14,
+				textColor: stagePalette.text,
+			}),
 		);
 
 	root
@@ -121,20 +131,11 @@ export function renderOrbitTypeBars(
 			d3
 				.axisBottom(x)
 				.ticks(5)
-				.tickFormat((value) =>
-					d3.format(".2s")(Number(value)).replace("G", "Md"),
-				),
+				.tickFormat((value) => formatCompactTick(Number(value))),
 		)
-		.call((axis) => axis.select(".domain").attr("stroke", stagePalette.line))
-		.call((axis) => axis.selectAll("line").attr("stroke", stagePalette.line))
-		.call((axis) =>
-			axis
-				.selectAll("text")
-				.attr("fill", stagePalette.muted)
-				.attr("font-size", 12),
-		);
+		.call((axis) => styleAxis(axis));
 
-	root
+	const segments = root
 		.selectAll(".stack")
 		.data(series)
 		.join("g")
@@ -177,26 +178,61 @@ export function renderOrbitTypeBars(
 		})
 		.attr("shape-rendering", "geometricPrecision")
 		.on("pointerenter", (event, item) => {
+			highlight(item.datum.typeOrbit);
 			tooltip.show(
-				`<strong>${item.datum.typeOrbit}</strong><br>Commercial: ${d3.format(",")(item.datum.commercial).replace(/,/g, " ")}<br>Autres missions: ${d3.format(",")(item.datum.other).replace(/,/g, " ")}`,
+				buildTooltip({
+					title: item.datum.typeOrbit,
+					rows: [
+						{ label: "Commercial", value: formatCount(item.datum.commercial) },
+						{ label: "Autres missions", value: formatCount(item.datum.other) },
+						{
+							label: "Part commerciale",
+							value: formatPercent(item.datum.commercial / item.datum.total),
+						},
+					],
+				}),
 				event,
 			);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", () => {
+			highlight(null);
+			tooltip.hide();
+		});
 
-	root
+	const shareLabels = root
 		.selectAll(".orbit-share-label")
 		.data(data)
 		.join("text")
 		.attr("x", (item) => x(item.total) + 12)
 		.attr("y", (item) => (y(item.typeOrbit) ?? 0) + y.bandwidth() / 2 + 5)
 		.attr("fill", stagePalette.text)
-		.attr("font-size", 13)
+		.attr("font-size", chartTypography.dataLabel)
 		.text(
-			(item) =>
-				`${Math.round((item.commercial / item.total) * 100)} % commercial`,
+			(item) => `${formatPercent(item.commercial / item.total)} commercial`,
 		);
+
+	function highlight(typeOrbit: string | null) {
+		segments
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (item) =>
+				!typeOrbit || item.datum.typeOrbit === typeOrbit
+					? chartInteraction.idle
+					: chartInteraction.muted,
+			);
+
+		shareLabels
+			.interrupt()
+			.transition()
+			.duration(chartInteraction.duration)
+			.style("opacity", (item) =>
+				!typeOrbit || item.typeOrbit === typeOrbit
+					? chartInteraction.idle
+					: chartInteraction.softMuted,
+			);
+	}
 
 	const legend = svg
 		.append("g")
@@ -205,44 +241,27 @@ export function renderOrbitTypeBars(
 			`translate(${margin.left}, ${margin.top + innerHeight + 30})`,
 		);
 
-	[
-		{ label: "Commercial", color: colors.commercial },
-		{ label: "Autres missions", color: colors.other },
-	].forEach((item, index) => {
-		const group = legend
-			.append("g")
-			.attr("transform", `translate(${index * 220}, 0)`);
-		group
-			.append("rect")
-			.attr("width", 14)
-			.attr("height", 14)
-			.attr("rx", 4)
-			.attr("fill", item.color);
-		group
-			.append("text")
-			.attr("x", 22)
-			.attr("y", 11)
-			.attr("fill", stagePalette.text)
-			.attr("font-size", 13)
-			.text(item.label);
+	appendLegend(legend, {
+		x: 0,
+		y: 0,
+		direction: "horizontal",
+		items: [
+			{
+				label: "Commercial",
+				color: colors.commercial,
+				marker: { type: "rect" },
+			},
+			{
+				label: "Autres missions",
+				color: colors.other,
+				marker: { type: "rect" },
+			},
+		],
 	});
 
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 60)
-		.attr("fill", stagePalette.text)
-		.attr("font-size", 30)
-		.attr("font-weight", 700)
-		.text("Les missions commerciales privilégient quelques orbites");
-
-	svg
-		.append("text")
-		.attr("x", 70)
-		.attr("y", 92)
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", 15)
-		.text(
-			"Les orbites non polaires inclinées, polaires et héliosynchrones portent l'essentiel du marché.",
-		);
+	appendChartHeader(
+		svg,
+		"Les missions commerciales privilégient quelques orbites",
+		"Les orbites non polaires inclinées, polaires et héliosynchrones portent l'essentiel du marché.",
+	);
 }
