@@ -8,48 +8,87 @@ import { renderLaunchTimeline } from "./charts/launchTimeline";
 import { renderOperatorBubbles } from "./charts/operatorBubbles";
 import { renderOrbitScatter } from "./charts/orbitScatter";
 import { renderOrbitTypeBars } from "./charts/orbitTypeBars";
-import { createTooltip } from "./charts/tooltip";
 import { renderUsageDonut } from "./charts/usageDonut";
 import { deriveMetrics } from "./data/deriveMetrics";
 import { loadSatellites } from "./data/loadSatellites";
+import { createTooltip, type TooltipController } from "./helpers/tooltip";
+import { escapeHtml } from "./helpers/tooltipContent";
 import { buildScenes } from "./story/scenes";
 import { createScrollController } from "./story/scrollController";
+import type { DerivedMetrics } from "./types";
 
-function getRequiredElement<T extends HTMLElement>(selector: string) {
-	const element = document.querySelector<T>(selector);
+function requiredElement<T extends Element>(
+	scope: Document | HTMLElement,
+	selector: string,
+) {
+	const element = scope.querySelector<T>(selector);
 	if (!element) {
 		throw new Error(`Élément introuvable: ${selector}`);
 	}
 	return element;
 }
 
-function escapeHtml(text: string) {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
+function setActiveState(
+	buttons: HTMLButtonElement[],
+	activeIndex: number,
+	updateSelected = false,
+) {
+	buttons.forEach((button, index) => {
+		const isActive = index === activeIndex;
+		button.dataset.active = String(isActive);
+		if (updateSelected) {
+			button.setAttribute("aria-selected", String(isActive));
+		}
+	});
+}
+
+function renderVisualizations(
+	scope: HTMLElement,
+	metrics: DerivedMetrics,
+	tooltip: TooltipController,
+) {
+	const mount = <Data>(
+		id: string,
+		render: (
+			container: HTMLElement,
+			data: Data,
+			controller: TooltipController,
+		) => void,
+		data: Data,
+	) => {
+		render(requiredElement(scope, `#viz-${id}`), data, tooltip);
+	};
+
+	renderIntroScene(requiredElement(scope, "#viz-intro"), metrics.summary);
+	mount("contractors", renderContractorBars, metrics.topContractors);
+	mount("operators", renderOperatorBubbles, metrics.topOperators);
+	mount("usage", renderUsageDonut, metrics.usageShares);
+	mount("orbits", renderOrbitScatter, metrics.orbitScatter);
+	mount("orbit-types", renderOrbitTypeBars, metrics.orbitMissionMix);
+	mount("launches", renderLaunchTimeline, metrics.launchTimeline);
+	mount("flow", renderContractorFlow, metrics.flow);
+	mount("age", renderAgeRidge, metrics.ageGroups);
 }
 
 function renderStoryShell(scenes: ReturnType<typeof buildScenes>) {
 	const menuItems = scenes
 		.map(
 			(scene, index) => `
-					<li role="none">
-						<button type="button" class="nav-menu-item" role="option" data-scene-index="${index}">
-							<span class="nav-menu-item-num">${index + 1}</span>
-							<span class="nav-menu-item-text">
-								<span class="nav-menu-item-kicker">${escapeHtml(scene.kicker)}</span>
-								<span class="nav-menu-item-title">${escapeHtml(scene.title)}</span>
-							</span>
-						</button>
-					</li>
-				`,
+				<li role="none">
+					<button type="button" class="nav-menu-item" role="option">
+						<span class="nav-menu-item-num">${index + 1}</span>
+						<span class="nav-menu-item-text">
+							<span class="nav-menu-item-kicker">${escapeHtml(scene.kicker)}</span>
+							<span class="nav-menu-item-title">${escapeHtml(scene.title)}</span>
+						</span>
+					</button>
+				</li>
+			`,
 		)
 		.join("");
 
 	const sceneMarkup = scenes
-		.map((scene, index) => {
+		.map((scene) => {
 			const copyMarkup = `
 				<div class="scene-copy">
 					<p class="step-kicker">${scene.kicker}</p>
@@ -62,7 +101,7 @@ function renderStoryShell(scenes: ReturnType<typeof buildScenes>) {
 
 			if (scene.id === "intro") {
 				return `
-					<div class="scene-layer scene-layer--intro" data-scene-index="${index}" data-scene-id="${scene.id}">
+					<div class="scene-layer scene-layer--intro">
 						<div class="scene-viz" id="viz-${scene.id}"></div>
 						${copyMarkup}
 					</div>
@@ -70,7 +109,7 @@ function renderStoryShell(scenes: ReturnType<typeof buildScenes>) {
 			}
 
 			return `
-				<div class="scene-layer scene-layer--split" data-scene-index="${index}" data-scene-id="${scene.id}">
+				<div class="scene-layer scene-layer--split">
 					<div class="scene-layout">
 						${copyMarkup}
 						<div class="scene-viz" id="viz-${scene.id}"></div>
@@ -126,7 +165,7 @@ function renderStoryShell(scenes: ReturnType<typeof buildScenes>) {
 					${scenes
 						.map(
 							(_, index) =>
-								`<button class="progress-dot" type="button" data-scene-index="${index}" aria-label="Aller à la scène ${index + 1}"></button>`,
+								`<button class="progress-dot" type="button" aria-label="Aller à la scène ${index + 1}"></button>`,
 						)
 						.join("")}
 				</div>
@@ -155,133 +194,81 @@ async function bootstrap() {
 		const scenes = buildScenes(metrics);
 
 		app.innerHTML = renderStoryShell(scenes);
+
 		const tooltip = createTooltip(document.body);
+		renderVisualizations(app, metrics, tooltip);
 
-		renderIntroScene(getRequiredElement("#viz-intro"), metrics.summary);
-		renderContractorBars(
-			getRequiredElement("#viz-contractors"),
-			metrics.topContractors,
-			tooltip,
+		const layers = [...app.querySelectorAll<HTMLElement>(".scene-layer")];
+		const dots = [...app.querySelectorAll<HTMLButtonElement>(".progress-dot")];
+		const menuItems = [
+			...app.querySelectorAll<HTMLButtonElement>(".nav-menu-item"),
+		];
+		const stageIndex = requiredElement<HTMLElement>(app, "#stage-index");
+		const scrollHint = requiredElement<HTMLElement>(app, "#scroll-hint");
+		const menuToggle = requiredElement<HTMLButtonElement>(
+			app,
+			"#nav-menu-toggle",
 		);
-		renderOperatorBubbles(
-			getRequiredElement("#viz-operators"),
-			metrics.topOperators,
-			tooltip,
+		const menuPanel = requiredElement<HTMLElement>(app, "#nav-menu-panel");
+		const menuBackdrop = requiredElement<HTMLElement>(
+			app,
+			"#nav-menu-backdrop",
 		);
-		renderUsageDonut(
-			getRequiredElement("#viz-usage"),
-			metrics.usageShares,
-			tooltip,
+		const menuClose = requiredElement<HTMLButtonElement>(
+			app,
+			"#nav-menu-close",
 		);
-		renderOrbitScatter(
-			getRequiredElement("#viz-orbits"),
-			metrics.orbitScatter,
-			tooltip,
-		);
-		renderOrbitTypeBars(
-			getRequiredElement("#viz-orbit-types"),
-			metrics.orbitMissionMix,
-			tooltip,
-		);
-		renderLaunchTimeline(
-			getRequiredElement("#viz-launches"),
-			metrics.launchTimeline,
-			tooltip,
-		);
-		renderContractorFlow(
-			getRequiredElement("#viz-flow"),
-			metrics.flow,
-			tooltip,
-		);
-		renderAgeRidge(getRequiredElement("#viz-age"), metrics.ageGroups, tooltip);
 
-		const layers = [...document.querySelectorAll<HTMLElement>(".scene-layer")];
-		const stageIndex = document.querySelector<HTMLElement>("#stage-index");
-		const dots = [
-			...document.querySelectorAll<HTMLButtonElement>(".progress-dot"),
-		];
-		const scrollHint = document.querySelector<HTMLElement>("#scroll-hint");
-		const menuToggle =
-			getRequiredElement<HTMLButtonElement>("#nav-menu-toggle");
-		const menuPanel = getRequiredElement<HTMLElement>("#nav-menu-panel");
-		const menuBackdrop = getRequiredElement<HTMLElement>("#nav-menu-backdrop");
-		const menuClose = getRequiredElement<HTMLButtonElement>("#nav-menu-close");
-		const menuItemsEls = [
-			...document.querySelectorAll<HTMLButtonElement>(".nav-menu-item"),
-		];
+		const setMenuOpen = (open: boolean) => {
+			menuPanel.toggleAttribute("hidden", !open);
+			menuBackdrop.toggleAttribute("hidden", !open);
+			menuToggle.setAttribute("aria-expanded", String(open));
+			(open ? menuClose : menuToggle).focus();
+		};
 
 		const controller = createScrollController({
-			sceneCount: scenes.length,
 			layers,
 			onSceneChange(index) {
-				if (stageIndex) {
-					stageIndex.textContent = `${index + 1}`;
-				}
-				dots.forEach((dot, dotIndex) => {
-					dot.dataset.active = dotIndex === index ? "true" : "false";
-				});
-				menuItemsEls.forEach((item, itemIndex) => {
-					item.dataset.active = itemIndex === index ? "true" : "false";
-					item.setAttribute(
-						"aria-selected",
-						itemIndex === index ? "true" : "false",
-					);
-				});
-				if (scrollHint && index > 0) {
+				stageIndex.textContent = `${index + 1}`;
+				setActiveState(dots, index);
+				setActiveState(menuItems, index, true);
+				if (index > 0) {
 					scrollHint.dataset.hidden = "true";
 				}
 			},
 		});
 
-		const isMenuOpen = () => !menuPanel.hasAttribute("hidden");
-		const setMenuOpen = (open: boolean) => {
-			menuPanel.toggleAttribute("hidden", !open);
-			menuBackdrop.toggleAttribute("hidden", !open);
-			menuToggle.setAttribute("aria-expanded", String(open));
-			if (open) {
-				menuClose.focus();
-			} else {
-				menuToggle.focus();
-			}
-		};
+		const closeMenu = () => setMenuOpen(false);
 
 		menuToggle.addEventListener("click", () => {
-			setMenuOpen(!isMenuOpen());
+			setMenuOpen(menuPanel.hasAttribute("hidden"));
 		});
+		menuClose.addEventListener("click", closeMenu);
+		menuBackdrop.addEventListener("click", closeMenu);
 
-		menuClose.addEventListener("click", () => {
-			setMenuOpen(false);
-		});
-
-		menuBackdrop.addEventListener("click", () => {
-			setMenuOpen(false);
-		});
-
-		menuItemsEls.forEach((item) => {
-			item.addEventListener("click", () => {
-				const index = Number(item.dataset.sceneIndex ?? 0);
+		menuItems.forEach((button, index) => {
+			button.addEventListener("click", () => {
 				controller.goTo(index);
-				setMenuOpen(false);
+				closeMenu();
+			});
+		});
+
+		dots.forEach((button, index) => {
+			button.addEventListener("click", () => {
+				controller.goTo(index);
 			});
 		});
 
 		document.addEventListener(
 			"keydown",
-			(e) => {
-				if (e.key === "Escape" && isMenuOpen()) {
-					e.preventDefault();
-					setMenuOpen(false);
+			(event) => {
+				if (event.key === "Escape" && !menuPanel.hasAttribute("hidden")) {
+					event.preventDefault();
+					closeMenu();
 				}
 			},
 			true,
 		);
-
-		dots.forEach((dot) => {
-			dot.addEventListener("click", () => {
-				const index = Number(dot.dataset.sceneIndex ?? 0);
-				controller.goTo(index);
-			});
-		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Erreur inconnue.";
 		app.innerHTML = `

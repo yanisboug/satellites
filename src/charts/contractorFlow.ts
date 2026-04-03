@@ -1,17 +1,16 @@
 import * as d3 from "d3";
-
-import type { FlowLinkDatum, FlowNodeDatum } from "../types";
 import {
 	appendChartHeader,
 	appendSectionLabel,
 	chartFrame,
 	chartInteraction,
 	chartTypography,
-} from "./chartFrame";
-import { formatCount } from "./formatters";
-import { stagePalette } from "./palette";
-import type { TooltipController } from "./tooltip";
-import { buildTooltip } from "./tooltipContent";
+} from "../helpers/chartFrame";
+import { formatCount } from "../helpers/formatters";
+import { stagePalette } from "../helpers/palette";
+import type { TooltipController } from "../helpers/tooltip";
+import { buildTooltip } from "../helpers/tooltipContent";
+import type { FlowLinkDatum, FlowNodeDatum } from "../types";
 
 interface FlowData {
 	contractors: FlowNodeDatum[];
@@ -25,21 +24,9 @@ interface PositionedNode extends FlowNodeDatum {
 	width: number;
 }
 
-const textMeasureCanvas = document.createElement("canvas");
-const textMeasureContext = textMeasureCanvas.getContext("2d");
-
-function measureLabelWidth(label: string) {
-	if (!textMeasureContext) {
-		return 184;
-	}
-	textMeasureContext.font =
-		'600 12.5px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-	return Math.ceil(textMeasureContext.measureText(label).width);
-}
-
 function getColumnWidth(labels: string[]) {
-	const widestLabel = d3.max(labels, measureLabelWidth) ?? 0;
-	return Math.max(156, Math.min(340, widestLabel + 36));
+	const longestLabel = d3.max(labels, (label) => label.length) ?? 0;
+	return Math.max(180, Math.min(340, longestLabel * 7 + 42));
 }
 
 export function renderContractorFlow(

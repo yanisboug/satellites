@@ -1,10 +1,9 @@
 interface ScrollControllerOptions {
-	sceneCount: number;
 	layers: HTMLElement[];
 	onSceneChange?: (index: number) => void;
 }
 
-interface StyleSample {
+interface SceneStyle {
 	opacity: number;
 	tz: number;
 	scale: number;
@@ -12,7 +11,7 @@ interface StyleSample {
 	zIndex: number;
 }
 
-const ACTIVE_STYLE: StyleSample = {
+const ACTIVE_STYLE: SceneStyle = {
 	opacity: 1,
 	tz: 0,
 	scale: 1,
@@ -20,7 +19,7 @@ const ACTIVE_STYLE: StyleSample = {
 	zIndex: 2,
 };
 
-const FUTURE_STYLE: StyleSample = {
+const FUTURE_STYLE: SceneStyle = {
 	opacity: 0,
 	tz: -220,
 	scale: 0.84,
@@ -28,7 +27,7 @@ const FUTURE_STYLE: StyleSample = {
 	zIndex: 0,
 };
 
-const PAST_STYLE: StyleSample = {
+const PAST_STYLE: SceneStyle = {
 	opacity: 0,
 	tz: 120,
 	scale: 1.08,
@@ -36,195 +35,94 @@ const PAST_STYLE: StyleSample = {
 	zIndex: 1,
 };
 
-function lerp(a: number, b: number, t: number) {
-	return a + (b - a) * t;
-}
-
-function mixStyles(from: StyleSample, to: StyleSample, t: number): StyleSample {
-	return {
-		opacity: lerp(from.opacity, to.opacity, t),
-		tz: lerp(from.tz, to.tz, t),
-		scale: lerp(from.scale, to.scale, t),
-		blur: lerp(from.blur, to.blur, t),
-		zIndex: t < 0.5 ? from.zIndex : to.zIndex,
-	};
-}
+const WHEEL_STEP_LOCK_MS = 320;
 
 function applyLayerStyle(
 	layer: HTMLElement,
-	s: StyleSample,
-	pointerEventsAuto: boolean,
+	style: SceneStyle,
+	interactive: boolean,
 ) {
-	layer.style.transition = "none";
-	layer.style.opacity = String(s.opacity);
-	layer.style.transform = `translate3d(0, 0, ${s.tz}px) scale(${s.scale})`;
-	layer.style.filter = `blur(${s.blur}px)`;
-	layer.style.zIndex = String(s.zIndex);
-	layer.style.pointerEvents = pointerEventsAuto ? "auto" : "none";
+	layer.style.opacity = String(style.opacity);
+	layer.style.transform = `translate3d(0, 0, ${style.tz}px) scale(${style.scale})`;
+	layer.style.filter = `blur(${style.blur}px)`;
+	layer.style.zIndex = String(style.zIndex);
+	layer.style.pointerEvents = interactive ? "auto" : "none";
 }
 
-function pickInteractionLayer(styles: StyleSample[]) {
-	let winner = 0;
-	let bestOpacity = -1;
-	let bestZ = -1;
-	for (let idx = 0; idx < styles.length; idx++) {
-		const s = styles[idx];
-		if (s.opacity > bestOpacity + 0.001) {
-			bestOpacity = s.opacity;
-			bestZ = s.zIndex;
-			winner = idx;
-		} else if (
-			Math.abs(s.opacity - bestOpacity) <= 0.001 &&
-			s.zIndex >= bestZ
-		) {
-			bestZ = s.zIndex;
-			winner = idx;
-		}
+function isMenuOpen() {
+	const panel = document.getElementById("nav-menu-panel");
+	return Boolean(panel && !panel.hasAttribute("hidden"));
+}
+
+function isTextInput(target: EventTarget | null) {
+	if (!(target instanceof HTMLElement)) {
+		return false;
 	}
-	return winner;
+
+	return target.tagName === "INPUT" || target.tagName === "TEXTAREA";
 }
 
 export function createScrollController({
-	sceneCount,
 	layers,
 	onSceneChange,
 }: ScrollControllerOptions) {
-	let progress = 0;
-	let lastReportedIndex = -1;
-	let snapRaf = 0;
+	const sceneCount = layers.length;
+	let currentIndex = 0;
 	let wheelUnlockTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const SNAP_DURATION_MS = 420;
-	const WHEEL_STEP_LOCK_MS = 320;
+	const clampIndex = (index: number) =>
+		Math.max(0, Math.min(sceneCount - 1, index));
 
-	const clampProgress = (p: number) => Math.max(0, Math.min(sceneCount - 1, p));
-
-	const isNavMenuOpen = () => {
-		const panel = document.getElementById("nav-menu-panel");
-		return Boolean(panel && !panel.hasAttribute("hidden"));
-	};
-
-	const reportSceneIfNeeded = () => {
-		const idx = Math.round(clampProgress(progress));
-		if (idx !== lastReportedIndex) {
-			lastReportedIndex = idx;
-			onSceneChange?.(idx);
-		}
-	};
-
-	const applyContinuousProgress = () => {
-		const p = clampProgress(progress);
-		const n = sceneCount;
-
-		if (n === 0) {
-			return;
-		}
-
-		if (n === 1) {
-			applyLayerStyle(layers[0], ACTIVE_STYLE, true);
-			reportSceneIfNeeded();
-			return;
-		}
-
-		const i = Math.min(Math.floor(p), n - 1);
-		const t = p - i;
-		const styles: StyleSample[] = [];
-
-		if (i >= n - 1) {
-			for (let idx = 0; idx < n; idx++) {
-				styles.push(idx < n - 1 ? PAST_STYLE : ACTIVE_STYLE);
-			}
-		} else {
-			for (let idx = 0; idx < n; idx++) {
-				if (idx < i) {
-					styles.push(PAST_STYLE);
-				} else if (idx > i + 1) {
-					styles.push(FUTURE_STYLE);
-				} else if (idx === i) {
-					styles.push(mixStyles(ACTIVE_STYLE, PAST_STYLE, t));
-				} else {
-					styles.push(mixStyles(FUTURE_STYLE, ACTIVE_STYLE, t));
-				}
-			}
-		}
-
-		const interactionIndex = pickInteractionLayer(styles);
-		layers.forEach((layer, idx) => {
-			const s = styles[idx];
-			if (!s) {
+	const render = () => {
+		layers.forEach((layer, index) => {
+			if (index === currentIndex) {
+				applyLayerStyle(layer, ACTIVE_STYLE, true);
 				return;
 			}
-			applyLayerStyle(layer, s, idx === interactionIndex && s.opacity > 0.04);
+
+			applyLayerStyle(
+				layer,
+				index < currentIndex ? PAST_STYLE : FUTURE_STYLE,
+				false,
+			);
 		});
 
-		reportSceneIfNeeded();
+		onSceneChange?.(currentIndex);
 	};
 
-	const cancelSnapAnimation = () => {
-		if (snapRaf !== 0) {
-			cancelAnimationFrame(snapRaf);
-			snapRaf = 0;
-		}
-	};
-
-	const releaseWheelLock = () => {
-		if (wheelUnlockTimer !== null) {
-			clearTimeout(wheelUnlockTimer);
-			wheelUnlockTimer = null;
-		}
-	};
-
-	const startSnapTo = (targetIndex: number) => {
-		const target = clampProgress(targetIndex);
-		cancelSnapAnimation();
-
-		const start = progress;
-		if (Math.abs(start - target) < 0.0001) {
-			progress = target;
-			applyContinuousProgress();
+	const goTo = (index: number) => {
+		if (sceneCount === 0) {
 			return;
 		}
 
-		const t0 = performance.now();
-
-		const frame = (now: number) => {
-			const u = Math.min(1, (now - t0) / SNAP_DURATION_MS);
-			const eased = 1 - (1 - u) ** 3;
-			progress = start + (target - start) * eased;
-			applyContinuousProgress();
-			if (u < 1) {
-				snapRaf = requestAnimationFrame(frame);
-			} else {
-				progress = target;
-				applyContinuousProgress();
-				snapRaf = 0;
-			}
-		};
-
-		snapRaf = requestAnimationFrame(frame);
-	};
-
-	const discreteStep = (delta: number) => {
-		cancelSnapAnimation();
-		const cur = Math.round(clampProgress(progress));
-		startSnapTo(cur + delta);
-	};
-
-	const onWheel = (e: WheelEvent) => {
-		if (isNavMenuOpen()) {
+		const nextIndex = clampIndex(index);
+		if (nextIndex === currentIndex) {
 			return;
 		}
-		e.preventDefault();
+
+		currentIndex = nextIndex;
+		render();
+	};
+
+	const step = (delta: number) => {
+		goTo(currentIndex + delta);
+	};
+
+	const onWheel = (event: WheelEvent) => {
+		if (isMenuOpen()) {
+			return;
+		}
+
+		event.preventDefault();
 
 		if (wheelUnlockTimer !== null) {
 			return;
 		}
 
-		let delta = e.deltaY;
-		if (e.deltaMode === 1) {
+		let delta = event.deltaY;
+		if (event.deltaMode === 1) {
 			delta *= 16;
-		}
-		if (e.deltaMode === 2) {
+		} else if (event.deltaMode === 2) {
 			delta *= window.innerHeight;
 		}
 
@@ -232,47 +130,43 @@ export function createScrollController({
 			return;
 		}
 
-		discreteStep(delta > 0 ? 1 : -1);
+		step(delta > 0 ? 1 : -1);
 		wheelUnlockTimer = setTimeout(() => {
 			wheelUnlockTimer = null;
 		}, WHEEL_STEP_LOCK_MS);
 	};
 
-	const onKeyDown = (e: KeyboardEvent) => {
-		if (isNavMenuOpen()) {
-			return;
-		}
-		const target = e.target as HTMLElement;
-		if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+	const onKeyDown = (event: KeyboardEvent) => {
+		if (isMenuOpen() || isTextInput(event.target)) {
 			return;
 		}
 
-		switch (e.key) {
+		switch (event.key) {
 			case "ArrowDown":
 			case "ArrowRight":
 			case "PageDown":
-				e.preventDefault();
-				discreteStep(1);
+				event.preventDefault();
+				step(1);
 				break;
 			case "ArrowUp":
 			case "ArrowLeft":
 			case "PageUp":
-				e.preventDefault();
-				discreteStep(-1);
+				event.preventDefault();
+				step(-1);
 				break;
 			case " ":
-				if (target.tagName !== "BUTTON") {
-					e.preventDefault();
-					discreteStep(1);
+				if (!(event.target instanceof HTMLButtonElement)) {
+					event.preventDefault();
+					step(1);
 				}
 				break;
 			case "Home":
-				e.preventDefault();
-				startSnapTo(0);
+				event.preventDefault();
+				goTo(0);
 				break;
 			case "End":
-				e.preventDefault();
-				startSnapTo(sceneCount - 1);
+				event.preventDefault();
+				goTo(sceneCount - 1);
 				break;
 		}
 	};
@@ -280,22 +174,7 @@ export function createScrollController({
 	window.addEventListener("wheel", onWheel, { passive: false });
 	window.addEventListener("keydown", onKeyDown);
 
-	progress = 0;
-	lastReportedIndex = -1;
-	applyContinuousProgress();
+	render();
 
-	return {
-		get activeIndex() {
-			return Math.round(clampProgress(progress));
-		},
-		goTo(index: number) {
-			startSnapTo(index);
-		},
-		destroy() {
-			cancelSnapAnimation();
-			releaseWheelLock();
-			window.removeEventListener("wheel", onWheel);
-			window.removeEventListener("keydown", onKeyDown);
-		},
-	};
+	return { goTo };
 }

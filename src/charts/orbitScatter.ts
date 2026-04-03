@@ -1,7 +1,5 @@
 import * as d3 from "d3";
-
-import type { OrbitScatterDatum } from "../types";
-import { styleAxis } from "./axis";
+import { styleAxis } from "../helpers/axis";
 import {
 	appendAxisLabel,
 	appendChartHeader,
@@ -9,12 +7,13 @@ import {
 	chartInteraction,
 	chartMargins,
 	chartTypography,
-} from "./chartFrame";
-import { formatKm } from "./formatters";
-import { appendLegend } from "./legend";
-import { colorFromMap, orbitPalette, stagePalette } from "./palette";
-import type { TooltipController } from "./tooltip";
-import { buildTooltip } from "./tooltipContent";
+} from "../helpers/chartFrame";
+import { formatKm } from "../helpers/formatters";
+import { appendLegend } from "../helpers/legend";
+import { colorFromMap, orbitPalette, stagePalette } from "../helpers/palette";
+import type { TooltipController } from "../helpers/tooltip";
+import { buildTooltip } from "../helpers/tooltipContent";
+import type { OrbitScatterDatum } from "../types";
 
 export function renderOrbitScatter(
 	container: HTMLElement,

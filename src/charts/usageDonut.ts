@@ -1,17 +1,16 @@
 import * as d3 from "d3";
-
-import type { ShareDatum } from "../types";
 import {
 	appendChartHeader,
 	appendSectionLabel,
 	chartFrame,
 	chartInteraction,
 	chartTypography,
-} from "./chartFrame";
-import { formatCount, formatPercent } from "./formatters";
-import { colorFromMap, stagePalette, usagePalette } from "./palette";
-import type { TooltipController } from "./tooltip";
-import { buildTooltip } from "./tooltipContent";
+} from "../helpers/chartFrame";
+import { formatCount, formatPercent } from "../helpers/formatters";
+import { colorFromMap, stagePalette, usagePalette } from "../helpers/palette";
+import type { TooltipController } from "../helpers/tooltip";
+import { buildTooltip } from "../helpers/tooltipContent";
+import type { ShareDatum } from "../types";
 
 export function renderUsageDonut(
 	container: HTMLElement,

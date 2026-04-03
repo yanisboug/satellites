@@ -1,3 +1,4 @@
+import { formatCount, formatPercent } from "../helpers/formatters";
 import type { DerivedMetrics } from "../types";
 
 export interface StoryScene {
@@ -7,14 +8,6 @@ export interface StoryScene {
 	lede: string;
 	body: string;
 	accent: string;
-}
-
-function formatInt(value: number) {
-	return new Intl.NumberFormat("fr-CA").format(value);
-}
-
-function formatPercent(value: number) {
-	return `${Math.round(value * 100)} %`;
 }
 
 export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
@@ -32,7 +25,7 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 			id: "intro",
 			kicker: "Question centrale",
 			title: "Qui occupe l'espace orbital aujourd'hui ?",
-			lede: `Au 1er mai 2023, ${formatInt(metrics.summary.totalSatellites)} satellites actifs structurent déjà une infrastructure orbitale devenue industrielle.`,
+			lede: `Au 1er mai 2023, ${formatCount(metrics.summary.totalSatellites)} satellites actifs structurent déjà une infrastructure orbitale devenue industrielle.`,
 			body: `Le récit suit la concentration du pouvoir spatial: qui construit, qui opère, dans quelles orbites, depuis quelles bases et avec quel renouvellement de flotte.`,
 			accent: `${formatPercent(metrics.summary.leoShare)} de la flotte se concentre déjà en LEO.`,
 		},
@@ -40,7 +33,7 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 			id: "contractors",
 			kicker: "Visualisation 1",
 			title: "La fabrication est dominée par un acteur hors norme",
-			lede: `${topContractor?.name ?? "Le leader"} construit à lui seul ${formatInt(topContractor?.count ?? 0)} satellites, très loin devant ${secondContractor?.name ?? "ses poursuivants"}.`,
+			lede: `${topContractor?.name ?? "Le leader"} construit à lui seul ${formatCount(topContractor?.count ?? 0)} satellites, très loin devant ${secondContractor?.name ?? "ses poursuivants"}.`,
 			body: "Les barres horizontales rendent visibles à la fois la taille absolue du parc et la part relative de marché. Le poids américain ressort immédiatement.",
 			accent: `${formatPercent(topContractor?.share ?? 0)} du parc mondial est associé au premier constructeur.`,
 		},

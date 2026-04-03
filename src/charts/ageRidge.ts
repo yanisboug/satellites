@@ -1,7 +1,5 @@
 import * as d3 from "d3";
-
-import type { AgeGroupDatum } from "../types";
-import { styleAxis } from "./axis";
+import { styleAxis } from "../helpers/axis";
 import {
 	appendAxisLabel,
 	appendChartHeader,
@@ -9,11 +7,16 @@ import {
 	chartInteraction,
 	chartMargins,
 	chartTypography,
-} from "./chartFrame";
-import { formatCount, formatDecimal, formatPercent } from "./formatters";
-import { stagePalette } from "./palette";
-import type { TooltipController } from "./tooltip";
-import { buildTooltip } from "./tooltipContent";
+} from "../helpers/chartFrame";
+import {
+	formatCount,
+	formatDecimal,
+	formatPercent,
+} from "../helpers/formatters";
+import { stagePalette } from "../helpers/palette";
+import type { TooltipController } from "../helpers/tooltip";
+import { buildTooltip } from "../helpers/tooltipContent";
+import type { AgeGroupDatum } from "../types";
 
 type DensityPoint = [number, number];
 const AGE_CAP = 30;

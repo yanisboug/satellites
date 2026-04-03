@@ -1,5 +1,4 @@
 import type {
-	AgeGroupDatum,
 	ContractorDatum,
 	DerivedMetrics,
 	FlowLinkDatum,
@@ -31,6 +30,39 @@ const ageGroupColors = {
 	military: "#7a5195",
 	mega: "#2a9d8f",
 };
+
+const ageGroupDefinitions = [
+	{
+		id: "civil",
+		label: "Civil classique",
+		color: ageGroupColors.civil,
+		matches: (satellite: NormalizedSatellite) =>
+			!satellite.isMegaConstellation &&
+			!satellite.isMilitary &&
+			satellite.purposeLabel !== "Communications",
+	},
+	{
+		id: "communication",
+		label: "Communication classique",
+		color: ageGroupColors.communication,
+		matches: (satellite: NormalizedSatellite) =>
+			!satellite.isMegaConstellation &&
+			satellite.purposeLabel === "Communications",
+	},
+	{
+		id: "military",
+		label: "Militaire classique",
+		color: ageGroupColors.military,
+		matches: (satellite: NormalizedSatellite) =>
+			!satellite.isMegaConstellation && satellite.isMilitary,
+	},
+	{
+		id: "mega",
+		label: "Méga-constellations",
+		color: ageGroupColors.mega,
+		matches: (satellite: NormalizedSatellite) => satellite.isMegaConstellation,
+	},
+] as const;
 
 function cleanLabel(
 	value: string | null | undefined,
@@ -83,6 +115,12 @@ function countBy<T>(items: T[], keyFn: (item: T) => string) {
 	}, new Map<string, number>());
 }
 
+function getTopCountEntries(counts: Map<string, number>, limit: number) {
+	return [...counts.entries()]
+		.sort((left, right) => right[1] - left[1])
+		.slice(0, limit);
+}
+
 function median(values: number[]) {
 	if (values.length === 0) {
 		return 0;
@@ -114,11 +152,13 @@ function normalizeSatellite(
 	const typeOrbitLabel = normalizeTypeOrbit(satellite.typeOrbit);
 	const usersLabel = cleanLabel(satellite.users);
 	const countryContractorLabel = normalizeCountry(satellite.countryContractor);
+	const countryOperatorLabel = normalizeCountry(satellite.countryOperator);
 	const launchSiteLabel = cleanLabel(satellite.launchSite);
 	const launchDateValue = new Date(satellite.launchDate);
 	const launchYear = launchDateValue.getUTCFullYear();
 	const userBucket = classifyUserBucket(usersLabel);
 	const isMegaConstellation = megaOperators.has(operatorLabel);
+	const isMilitary = userBucket === "Militaire";
 	const isExpired =
 		typeof satellite.expectedLifetime === "number" &&
 		satellite.expectedLifetime > 0 &&
@@ -134,11 +174,12 @@ function normalizeSatellite(
 		typeOrbitLabel,
 		contractorLabel,
 		operatorLabel,
+		countryOperatorLabel,
 		countryContractorLabel,
 		launchSiteLabel,
 		userBucket,
 		isCommercial: userBucket === "Commercial",
-		isMilitary: usersLabel.toLowerCase().includes("military"),
+		isMilitary,
 		isExpired,
 		isMegaConstellation,
 	};
@@ -227,7 +268,7 @@ function buildTopOperators(satellites: NormalizedSatellite[]) {
 
 	for (const satellite of satellites) {
 		const name = satellite.operatorLabel;
-		const country = normalizeCountry(satellite.countryOperator);
+		const country = satellite.countryOperatorLabel;
 		const entry = grouped.get(name) ?? {
 			count: 0,
 			countries: new Map<string, number>(),
@@ -295,12 +336,10 @@ function buildOrbitMissionMix(satellites: NormalizedSatellite[]) {
 }
 
 function buildLaunchTimeline(satellites: NormalizedSatellite[]) {
-	const topSites = [
-		...countBy(satellites, (satellite) => satellite.launchSiteLabel).entries(),
-	]
-		.sort((left, right) => right[1] - left[1])
-		.slice(0, 5)
-		.map(([site]) => site);
+	const topSites = getTopCountEntries(
+		countBy(satellites, (satellite) => satellite.launchSiteLabel),
+		5,
+	).map(([site]) => site);
 	const selectedSites = new Set(topSites);
 	const grouped = new Map<string, YearSiteDatum>();
 
@@ -356,20 +395,18 @@ function buildLaunchTimeline(satellites: NormalizedSatellite[]) {
 }
 
 function buildFlow(satellites: NormalizedSatellite[]) {
-	const contractorTotals = [
-		...countBy(satellites, (satellite) => satellite.contractorLabel).entries(),
-	]
-		.sort((left, right) => right[1] - left[1])
-		.slice(0, 6);
+	const contractorTotals = getTopCountEntries(
+		countBy(satellites, (satellite) => satellite.contractorLabel),
+		6,
+	);
 	const contractorSet = new Set(contractorTotals.map(([name]) => name));
 	const filtered = satellites.filter((satellite) =>
 		contractorSet.has(satellite.contractorLabel),
 	);
-	const siteTotals = [
-		...countBy(filtered, (satellite) => satellite.launchSiteLabel).entries(),
-	]
-		.sort((left, right) => right[1] - left[1])
-		.slice(0, 6);
+	const siteTotals = getTopCountEntries(
+		countBy(filtered, (satellite) => satellite.launchSiteLabel),
+		6,
+	);
 	const siteSet = new Set(siteTotals.map(([name]) => name));
 	const linksMap = new Map<string, FlowLinkDatum>();
 
@@ -418,54 +455,19 @@ function buildFlow(satellites: NormalizedSatellite[]) {
 }
 
 function buildAgeGroups(satellites: NormalizedSatellite[]) {
-	const groups: AgeGroupDatum[] = [];
-
-	const definitions = [
-		{
-			id: "civil",
-			label: "Civil classique",
-			color: ageGroupColors.civil,
-			filter: (satellite: NormalizedSatellite) =>
-				!satellite.isMegaConstellation &&
-				!satellite.isMilitary &&
-				satellite.purposeLabel !== "Communications",
-		},
-		{
-			id: "communication",
-			label: "Communication classique",
-			color: ageGroupColors.communication,
-			filter: (satellite: NormalizedSatellite) =>
-				!satellite.isMegaConstellation &&
-				satellite.purposeLabel === "Communications",
-		},
-		{
-			id: "military",
-			label: "Militaire classique",
-			color: ageGroupColors.military,
-			filter: (satellite: NormalizedSatellite) =>
-				!satellite.isMegaConstellation && satellite.isMilitary,
-		},
-		{
-			id: "mega",
-			label: "Méga-constellations",
-			color: ageGroupColors.mega,
-			filter: (satellite: NormalizedSatellite) => satellite.isMegaConstellation,
-		},
-	];
-
-	for (const definition of definitions) {
-		const satellitesInGroup = satellites.filter(definition.filter);
-		const ages = satellitesInGroup.map((satellite) => satellite.ageYears);
-		const lifetimes = satellitesInGroup
+	return ageGroupDefinitions.map((definition) => {
+		const groupSatellites = satellites.filter(definition.matches);
+		const ages = groupSatellites.map((satellite) => satellite.ageYears);
+		const lifetimes = groupSatellites
 			.map((satellite) => satellite.expectedLifetime)
 			.filter(
 				(value): value is number => typeof value === "number" && value > 0,
 			);
-		const expiredCount = satellitesInGroup.filter(
+		const expiredCount = groupSatellites.filter(
 			(satellite) => satellite.isExpired,
 		).length;
 
-		groups.push({
+		return {
 			id: definition.id,
 			label: definition.label,
 			color: definition.color,
@@ -473,14 +475,10 @@ function buildAgeGroups(satellites: NormalizedSatellite[]) {
 			medianAge: median(ages),
 			medianLifetime: median(lifetimes),
 			expiredShare:
-				satellitesInGroup.length > 0
-					? expiredCount / satellitesInGroup.length
-					: 0,
-			total: satellitesInGroup.length,
-		});
-	}
-
-	return groups;
+				groupSatellites.length > 0 ? expiredCount / groupSatellites.length : 0,
+			total: groupSatellites.length,
+		};
+	});
 }
 
 export function deriveMetrics(dataset: SatelliteDataset): DerivedMetrics {
@@ -490,9 +488,10 @@ export function deriveMetrics(dataset: SatelliteDataset): DerivedMetrics {
 	);
 	const topContractors = buildTopContractors(satellites);
 	const topOperators = buildTopOperators(satellites);
-	const topLaunchSite = [
-		...countBy(satellites, (satellite) => satellite.launchSiteLabel).entries(),
-	].sort((left, right) => right[1] - left[1])[0];
+	const topLaunchSite = getTopCountEntries(
+		countBy(satellites, (satellite) => satellite.launchSiteLabel),
+		1,
+	)[0];
 
 	return {
 		meta: dataset.meta,

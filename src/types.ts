@@ -41,6 +41,7 @@ export interface NormalizedSatellite extends SatelliteRecord {
 	typeOrbitLabel: string;
 	contractorLabel: string;
 	operatorLabel: string;
+	countryOperatorLabel: string;
 	countryContractorLabel: string;
 	launchSiteLabel: string;
 	userBucket: "Commercial" | "Militaire" | "Autre";

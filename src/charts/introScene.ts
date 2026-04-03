@@ -1,6 +1,6 @@
 import * as d3 from "d3";
+import { stagePalette } from "../helpers/palette";
 import type { SummaryMetric } from "../types";
-import { stagePalette } from "./palette";
 
 export function renderIntroScene(
 	container: HTMLElement,

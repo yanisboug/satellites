@@ -1,19 +1,22 @@
 import * as d3 from "d3";
-
-import type { OrbitMissionDatum } from "../types";
-import { styleAxis } from "./axis";
+import { styleAxis } from "../helpers/axis";
 import {
 	appendChartHeader,
 	chartFrame,
 	chartInteraction,
 	chartMargins,
 	chartTypography,
-} from "./chartFrame";
-import { formatCompactTick, formatCount, formatPercent } from "./formatters";
-import { appendLegend } from "./legend";
-import { stagePalette } from "./palette";
-import type { TooltipController } from "./tooltip";
-import { buildTooltip } from "./tooltipContent";
+} from "../helpers/chartFrame";
+import {
+	formatCompactTick,
+	formatCount,
+	formatPercent,
+} from "../helpers/formatters";
+import { appendLegend } from "../helpers/legend";
+import { stagePalette } from "../helpers/palette";
+import type { TooltipController } from "../helpers/tooltip";
+import { buildTooltip } from "../helpers/tooltipContent";
+import type { OrbitMissionDatum } from "../types";
 
 const BAR_RADIUS = 12;
 

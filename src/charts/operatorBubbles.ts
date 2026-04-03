@@ -1,23 +1,24 @@
 import * as d3 from "d3";
-
-import type { OperatorDatum } from "../types";
 import {
 	appendChartHeader,
 	chartFrame,
 	chartInteraction,
 	chartTypography,
-} from "./chartFrame";
-import { formatCount, formatPercent } from "./formatters";
-import { appendLegend } from "./legend";
-import { colorFromMap, countryPalette, stagePalette } from "./palette";
-import type { TooltipController } from "./tooltip";
-import { buildTooltip } from "./tooltipContent";
+} from "../helpers/chartFrame";
+import { formatCount, formatPercent } from "../helpers/formatters";
+import { appendLegend } from "../helpers/legend";
+import { colorFromMap, countryPalette, stagePalette } from "../helpers/palette";
+import type { TooltipController } from "../helpers/tooltip";
+import { buildTooltip } from "../helpers/tooltipContent";
+import type { OperatorDatum } from "../types";
 
 interface BubbleNode extends OperatorDatum {
 	r: number;
 	x: number;
 	y: number;
 }
+
+type OperatorFocusDatum = Pick<OperatorDatum, "count" | "name" | "share">;
 
 function truncateName(name: string, maxLen: number) {
 	const short = name.replace(/\s+\(.*/, "").trim();
@@ -89,6 +90,28 @@ export function renderOperatorBubbles(
 
 	const pctFmt = (share: number) => formatPercent(share);
 
+	const showOperatorDetails = (
+		event: PointerEvent,
+		item: OperatorFocusDatum,
+	) => {
+		highlight(item.name);
+		tooltip.show(
+			buildTooltip({
+				title: item.name,
+				rows: [
+					{ label: "Satellites actifs", value: formatCount(item.count) },
+					{ label: "Part du parc", value: pctFmt(item.share) },
+				],
+			}),
+			event,
+		);
+	};
+
+	const clearOperatorDetails = () => {
+		highlight(null);
+		tooltip.hide();
+	};
+
 	const connectorSelection = connectorRoot
 		.selectAll<SVGLineElement, BubbleNode>(".operator-connector")
 		.data(nodes)
@@ -119,24 +142,9 @@ export function renderOperatorBubbles(
 		.join("g")
 		.attr("class", "bubble-node")
 		.attr("transform", (item) => `translate(${item.x}, ${item.y})`)
-		.on("pointerenter", (event, item) => {
-			highlight(item.name);
-			tooltip.show(
-				buildTooltip({
-					title: item.name,
-					rows: [
-						{ label: "Satellites actifs", value: formatCount(item.count) },
-						{ label: "Part du parc", value: pctFmt(item.share) },
-					],
-				}),
-				event,
-			);
-		})
+		.on("pointerenter", (event, item) => showOperatorDetails(event, item))
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
-			highlight(null);
-			tooltip.hide();
-		});
+		.on("pointerleave", clearOperatorDetails);
 
 	bubbleGroups
 		.append("circle")
@@ -156,24 +164,9 @@ export function renderOperatorBubbles(
 		.attr("class", "operator-item")
 		.attr("transform", (_, index) => `translate(0, ${index * listRowH})`)
 		.style("cursor", "pointer")
-		.on("pointerenter", (event, item) => {
-			highlight(item.name);
-			tooltip.show(
-				buildTooltip({
-					title: item.name,
-					rows: [
-						{ label: "Satellites actifs", value: formatCount(item.count) },
-						{ label: "Part du parc", value: pctFmt(item.share) },
-					],
-				}),
-				event,
-			);
-		})
+		.on("pointerenter", (event, item) => showOperatorDetails(event, item))
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
-			highlight(null);
-			tooltip.hide();
-		});
+		.on("pointerleave", clearOperatorDetails);
 
 	const legend = svg
 		.append("g")
