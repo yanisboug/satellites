@@ -25,12 +25,24 @@ export function renderLaunchTimeline(
 	tooltip: TooltipController,
 ) {
 	const { width, height } = chartFrame;
-	const margin = chartMargins.timeline;
+	const margin = { ...chartMargins.timeline, right: 250, bottom: 92 };
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const years = [...new Set(timeline.data.map((item) => item.year))].sort(
 		(left, right) => left - right,
 	);
+	const axisYears = years.filter((year) => year >= 2000);
+	const maxTickCount = Math.max(6, Math.floor(innerWidth / 48));
+	const tickStep = Math.max(1, Math.ceil(axisYears.length / maxTickCount));
+	const xTicks = axisYears.filter(
+		(year, index) => index % tickStep === 0 || year === axisYears.at(-1),
+	);
+	if (
+		xTicks.length >= 2 &&
+		xTicks[xTicks.length - 1] - xTicks[xTicks.length - 2] < tickStep
+	) {
+		xTicks.splice(xTicks.length - 2, 1);
+	}
 	const siteLabels = new Map(
 		timeline.data.map((item) => [item.site, item.label]),
 	);
@@ -82,11 +94,21 @@ export function renderLaunchTimeline(
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-	root
+	const xAxis = root
 		.append("g")
 		.attr("transform", `translate(0, ${innerHeight})`)
-		.call(d3.axisBottom(x).tickValues(years.filter((year) => year >= 2000)))
+		.call(
+			d3
+				.axisBottom(x)
+				.tickValues(xTicks)
+				.tickFormat((value) => d3.format("d")(Number(value))),
+		)
 		.call((axis) => styleAxis(axis));
+
+	xAxis
+		.selectAll<SVGTextElement, number>("text")
+		.attr("text-anchor", "end")
+		.attr("transform", "translate(-8, 10) rotate(-35)");
 
 	root
 		.append("g")
@@ -211,7 +233,10 @@ export function renderLaunchTimeline(
 
 	const legend = svg
 		.append("g")
-		.attr("transform", `translate(620, ${chartFrame.contentTop - 14})`);
+		.attr(
+			"transform",
+			`translate(${width - 210}, ${chartFrame.contentTop - 14})`,
+		);
 
 	appendLegend(legend, {
 		x: 0,
