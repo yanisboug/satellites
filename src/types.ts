@@ -45,7 +45,6 @@ export interface NormalizedSatellite extends SatelliteRecord {
 	countryContractorLabel: string;
 	launchSiteLabel: string;
 	userBucket: "Commercial" | "Militaire" | "Autre";
-	isCommercial: boolean;
 	isMilitary: boolean;
 	isExpired: boolean;
 	isMegaConstellation: boolean;

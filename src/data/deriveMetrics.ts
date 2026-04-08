@@ -1,3 +1,4 @@
+import * as d3 from "d3";
 import type {
 	ContractorDatum,
 	DerivedMetrics,
@@ -121,26 +122,6 @@ function getTopCountEntries(counts: Map<string, number>, limit: number) {
 		.slice(0, limit);
 }
 
-function median(values: number[]) {
-	if (values.length === 0) {
-		return 0;
-	}
-
-	const sorted = [...values].sort((left, right) => left - right);
-	const middle = Math.floor(sorted.length / 2);
-	return sorted.length % 2 === 0
-		? (sorted[middle - 1] + sorted[middle]) / 2
-		: sorted[middle];
-}
-
-function summarizeShares(map: Map<string, number>, total: number) {
-	return [...map.entries()].map(([label, count]) => ({
-		label,
-		count,
-		share: count / total,
-	}));
-}
-
 function normalizeSatellite(
 	satellite: SatelliteRecord,
 	megaOperators: Set<string>,
@@ -178,7 +159,6 @@ function normalizeSatellite(
 		countryContractorLabel,
 		launchSiteLabel,
 		userBucket,
-		isCommercial: userBucket === "Commercial",
 		isMilitary,
 		isExpired,
 		isMegaConstellation,
@@ -291,9 +271,10 @@ function buildTopOperators(satellites: NormalizedSatellite[]) {
 
 function buildUsageShares(satellites: NormalizedSatellite[]) {
 	const grouped = countBy(satellites, (satellite) => satellite.userBucket);
-	return summarizeShares(grouped, satellites.length).sort(
-		(left, right) => right.count - left.count,
-	);
+	const total = satellites.length;
+	return [...grouped.entries()]
+		.map(([label, count]) => ({ label, count, share: count / total }))
+		.sort((left, right) => right.count - left.count);
 }
 
 function buildOrbitScatter(satellites: NormalizedSatellite[]) {
@@ -472,8 +453,8 @@ function buildAgeGroups(satellites: NormalizedSatellite[]) {
 			label: definition.label,
 			color: definition.color,
 			ages,
-			medianAge: median(ages),
-			medianLifetime: median(lifetimes),
+			medianAge: d3.median(ages) ?? 0,
+			medianLifetime: d3.median(lifetimes) ?? 0,
 			expiredShare:
 				groupSatellites.length > 0 ? expiredCount / groupSatellites.length : 0,
 			total: groupSatellites.length,

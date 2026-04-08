@@ -18,8 +18,6 @@ interface BubbleNode extends OperatorDatum {
 	y: number;
 }
 
-type OperatorFocusDatum = Pick<OperatorDatum, "count" | "name" | "share">;
-
 function truncateName(name: string, maxLen: number) {
 	const short = name.replace(/\s+\(.*/, "").trim();
 	if (short.length <= maxLen) {
@@ -88,19 +86,14 @@ export function renderOperatorBubbles(
 
 	const stage = svg.append("g").attr("transform", "translate(0, 0)");
 
-	const pctFmt = (share: number) => formatPercent(share);
-
-	const showOperatorDetails = (
-		event: PointerEvent,
-		item: OperatorFocusDatum,
-	) => {
+	const showOperatorDetails = (event: PointerEvent, item: OperatorDatum) => {
 		highlight(item.name);
 		tooltip.show(
 			buildTooltip({
 				title: item.name,
 				rows: [
 					{ label: "Satellites actifs", value: formatCount(item.count) },
-					{ label: "Part du parc", value: pctFmt(item.share) },
+					{ label: "Part du parc", value: formatPercent(item.share) },
 				],
 			}),
 			event,
@@ -276,7 +269,7 @@ export function renderOperatorBubbles(
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", chartTypography.listLabel)
 		.attr("font-weight", 600)
-		.text((item) => pctFmt(item.share));
+		.text((item) => formatPercent(item.share));
 
 	appendChartHeader(
 		svg,

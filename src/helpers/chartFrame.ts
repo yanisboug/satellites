@@ -1,15 +1,9 @@
-import type { BaseType, Selection } from "d3";
+import type { Selection } from "d3";
 
 import { stagePalette } from "./palette";
 
-interface TextLabelOptions {
-	anchor?: "start" | "middle" | "end";
-	fill?: string;
-}
-
-interface AxisLabelOptions extends TextLabelOptions {
-	rotate?: number;
-}
+// biome-ignore lint/suspicious/noExplicitAny: D3 selections are loosely typed by design
+type SvgSelection = Selection<any, any, any, any>;
 
 export const chartFrame = {
 	width: 960,
@@ -107,17 +101,12 @@ export function appendChartHeader(
 		.text(subtitle);
 }
 
-export function appendSectionLabel<
-	Element extends BaseType,
-	Datum,
-	ParentElement extends BaseType,
-	ParentDatum,
->(
-	parent: Selection<Element, Datum, ParentElement, ParentDatum>,
+export function appendSectionLabel(
+	parent: SvgSelection,
 	text: string,
 	x: number,
 	y: number,
-	options: TextLabelOptions = {},
+	options: { anchor?: "start" | "middle" | "end"; fill?: string } = {},
 ) {
 	return parent
 		.append("text")
@@ -131,17 +120,16 @@ export function appendSectionLabel<
 		.text(text.toUpperCase());
 }
 
-export function appendAxisLabel<
-	Element extends BaseType,
-	Datum,
-	ParentElement extends BaseType,
-	ParentDatum,
->(
-	parent: Selection<Element, Datum, ParentElement, ParentDatum>,
+export function appendAxisLabel(
+	parent: SvgSelection,
 	text: string,
 	x: number,
 	y: number,
-	options: AxisLabelOptions = {},
+	options: {
+		anchor?: "start" | "middle" | "end";
+		fill?: string;
+		rotate?: number;
+	} = {},
 ) {
 	const label = parent
 		.append("text")

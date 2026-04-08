@@ -54,14 +54,6 @@ function isMenuOpen() {
 	return Boolean(panel && !panel.hasAttribute("hidden"));
 }
 
-function isTextInput(target: EventTarget | null) {
-	if (!(target instanceof HTMLElement)) {
-		return false;
-	}
-
-	return target.tagName === "INPUT" || target.tagName === "TEXTAREA";
-}
-
 export function createScrollController({
 	layers,
 	onSceneChange,
@@ -137,7 +129,7 @@ export function createScrollController({
 	};
 
 	const onKeyDown = (event: KeyboardEvent) => {
-		if (isMenuOpen() || isTextInput(event.target)) {
+		if (isMenuOpen()) {
 			return;
 		}
 
