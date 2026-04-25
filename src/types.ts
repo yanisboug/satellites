@@ -74,7 +74,6 @@ export interface ContractorDatum {
 
 export interface OperatorDatum {
 	name: string;
-	/** Pays le plus fréquent parmi les satellites de cet opérateur (couleur = viz. constructeurs). */
 	country: string;
 	count: number;
 	share: number;
