@@ -21,10 +21,7 @@ export function renderOrbitScatter(
 	tooltip: TooltipController,
 ) {
 	const { width, height } = chartFrame;
-	const margin = {
-		...chartMargins.scatter,
-		top: chartMargins.scatter.top + 18,
-	};
+	const margin = chartMargins.scatter;
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const x = d3.scaleLog().domain([100, 400000]).range([0, innerWidth]);
