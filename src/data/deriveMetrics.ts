@@ -365,6 +365,8 @@ function buildLaunchTimeline(satellites: NormalizedSatellite[]) {
 				avgSatellitesPerLaunchDate:
 					counts.reduce((sum, count) => sum + count, 0) / counts.length,
 				maxSatellitesOnSingleDate: Math.max(...counts),
+				totalLaunchDates: counts.length,
+				groupedLaunchDates: counts.filter((count) => count >= 2).length,
 			};
 		});
 
@@ -376,7 +378,8 @@ function buildLaunchTimeline(satellites: NormalizedSatellite[]) {
 }
 
 function buildFlow(satellites: NormalizedSatellite[]) {
-	const OTHERS_LABEL = "Autres";
+	const OTHER_CONTRACTORS = "Autres constructeurs";
+	const OTHER_SITES = "Autres sites";
 	const contractorTotals = getTopCountEntries(
 		countBy(satellites, (satellite) => satellite.contractorLabel),
 		8,
@@ -399,10 +402,10 @@ function buildFlow(satellites: NormalizedSatellite[]) {
 	for (const satellite of satellites) {
 		const contractor = contractorSet.has(satellite.contractorLabel)
 			? satellite.contractorLabel
-			: OTHERS_LABEL;
+			: OTHER_CONTRACTORS;
 		const site = siteSet.has(satellite.launchSiteLabel)
 			? satellite.launchSiteLabel
-			: OTHERS_LABEL;
+			: OTHER_SITES;
 		const key = `${contractor}__${site}`;
 		const current = linksMap.get(key) ?? {
 			source: contractor,
@@ -420,9 +423,9 @@ function buildFlow(satellites: NormalizedSatellite[]) {
 
 	const contractorOrder = [
 		...contractorTotals.map(([name]) => name),
-		OTHERS_LABEL,
+		OTHER_CONTRACTORS,
 	];
-	const siteOrder = [...siteTotals.map(([name]) => name), OTHERS_LABEL];
+	const siteOrder = [...siteTotals.map(([name]) => name), OTHER_SITES];
 	const contractors: FlowNodeDatum[] = contractorOrder.map((name) => ({
 		id: name,
 		label: name,
@@ -431,7 +434,7 @@ function buildFlow(satellites: NormalizedSatellite[]) {
 	}));
 	const sites: FlowNodeDatum[] = siteOrder.map((name) => ({
 		id: name,
-		label: name,
+		label: name === OTHER_SITES ? name : formatLaunchSiteLabel(name),
 		value: siteCounts.get(name) ?? 0,
 		side: "site",
 	}));

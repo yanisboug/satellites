@@ -1,61 +1,64 @@
 import * as d3 from "d3";
 import {
+	appendAxisLabel,
 	appendChartHeader,
+	appendSectionLabel,
 	chartFrame,
 	chartInteraction,
 	chartTypography,
 } from "../helpers/chartFrame";
-import { formatCount } from "../helpers/formatters";
+import { formatCount, formatPercent } from "../helpers/formatters";
 import { stagePalette } from "../helpers/palette";
 import type { TooltipController } from "../helpers/tooltip";
 import { buildTooltip } from "../helpers/tooltipContent";
-import type { FlowLinkDatum, FlowNodeDatum } from "../types";
+import type { DerivedMetrics, FlowNodeDatum } from "../types";
 
-interface FlowData {
-	contractors: FlowNodeDatum[];
-	sites: FlowNodeDatum[];
-	links: FlowLinkDatum[];
-}
+type FlowData = DerivedMetrics["flow"];
 
 interface MatrixCell {
 	contractor: FlowNodeDatum;
 	site: FlowNodeDatum;
+	row: number;
+	column: number;
 	value: number;
 }
+
+const matrixMargin = {
+	top: chartFrame.contentTop + 116,
+	right: 126,
+	bottom: 88,
+	left: 300,
+};
+
+const layout = {
+	cellGap: 5,
+	columnLabelRotation: -48,
+	rowTotalOffset: 24,
+	rowLabelChars: 34,
+	columnLabelChars: 22,
+};
+
+const colors = {
+	emptyCell: "#101a2c",
+	lowCell: "#162338",
+	highCell: stagePalette.highlight,
+	cellBorder: "rgba(148, 163, 184, 0.18)",
+	activeStroke: "#fde68a",
+};
+
+const bubbleMinRadius = 2.5;
+const legendGradientId = "contractor-flow-volume-gradient";
+const legendWidth = 210;
+const legendHeight = 8;
+const flowLabelFontSize = 12;
 
 function truncateLabel(value: string, maxLen: number) {
 	const trimmed = value.trim();
 	if (trimmed.length <= maxLen) {
 		return trimmed;
 	}
-	if (maxLen < 2) {
-		return "…";
-	}
-	return `${trimmed.slice(0, maxLen - 1).trimEnd()}…`;
+	return maxLen < 2 ? "…" : `${trimmed.slice(0, maxLen - 1).trimEnd()}…`;
 }
-
-const matrixMargin = {
-	top: chartFrame.contentTop + 132,
-	right: 80,
-	bottom: 96,
-	left: 328,
-};
-
-const rowLabelMaxChars = 40;
-const columnLabelMaxChars = 20;
-const columnLabelRotation = -55;
-
-const cellPadding = 0.06;
-const cellEmptyFill = "#152033";
-const cellHighFill = "#7dd3fc";
-const cellBorder = "rgba(148, 163, 184, 0.18)";
-const cellFocusStroke = "#fde68a";
-const bubbleFill = "#0f172a";
-const bubbleStroke = "rgba(186, 230, 253, 0.75)";
-const bubbleMinRadius = 2.5;
-const legendGradientId = "contractor-flow-legend-gradient";
-const legendWidth = 220;
-const legendHeight = 8;
 
 export function renderContractorFlow(
 	container: HTMLElement,
@@ -65,6 +68,46 @@ export function renderContractorFlow(
 	const { width, height } = chartFrame;
 	const innerWidth = width - matrixMargin.left - matrixMargin.right;
 	const innerHeight = height - matrixMargin.top - matrixMargin.bottom;
+	const columnCount = Math.max(1, flow.sites.length);
+	const rowCount = Math.max(1, flow.contractors.length);
+	const cellWidth =
+		(innerWidth - layout.cellGap * Math.max(0, columnCount - 1)) / columnCount;
+	const cellHeight =
+		(innerHeight - layout.cellGap * Math.max(0, rowCount - 1)) / rowCount;
+	const stepX = cellWidth + layout.cellGap;
+	const stepY = cellHeight + layout.cellGap;
+	const valueByRoute = new Map(
+		flow.links.map((link) => [`${link.source}__${link.target}`, link.value]),
+	);
+	const cells = flow.contractors.flatMap((contractor, row) =>
+		flow.sites.map((site, column) => ({
+			contractor,
+			site,
+			row,
+			column,
+			value: valueByRoute.get(`${contractor.id}__${site.id}`) ?? 0,
+		})),
+	);
+	const totalSatellites =
+		d3.sum(flow.contractors, (contractor) => contractor.value) || 1;
+	const maxValue = d3.max(cells, (cell) => cell.value) ?? 0;
+	const radiusScale = d3
+		.scaleSqrt()
+		.domain([0, maxValue])
+		.range([0, Math.max(0, Math.min(cellWidth, cellHeight) / 2 - 5)]);
+	const intensityScale = d3
+		.scaleSqrt()
+		.domain([0, maxValue])
+		.range([0, 1])
+		.clamp(true);
+	const cellColor = (value: number) =>
+		value === 0
+			? colors.emptyCell
+			: d3.interpolateRgb(
+					colors.lowCell,
+					colors.highCell,
+				)(intensityScale(value));
+
 	const svg = d3
 		.select(container)
 		.append("svg")
@@ -76,158 +119,116 @@ export function renderContractorFlow(
 			"Matrice de correspondance entre constructeurs et sites de lancement",
 		);
 
-	const valueLookup = new Map<string, number>();
-	for (const link of flow.links) {
-		valueLookup.set(`${link.source}__${link.target}`, link.value);
-	}
-
-	const cells: MatrixCell[] = [];
-	for (const contractor of flow.contractors) {
-		for (const site of flow.sites) {
-			cells.push({
-				contractor,
-				site,
-				value: valueLookup.get(`${contractor.id}__${site.id}`) ?? 0,
-			});
-		}
-	}
-
-	const maxValue = d3.max(cells, (cell) => cell.value) ?? 0;
-	const x = d3
-		.scaleBand<string>()
-		.domain(flow.sites.map((site) => site.id))
-		.range([0, innerWidth])
-		.padding(cellPadding);
-	const y = d3
-		.scaleBand<string>()
-		.domain(flow.contractors.map((contractor) => contractor.id))
-		.range([0, innerHeight])
-		.padding(cellPadding);
-	const cellWidth = x.bandwidth();
-	const cellHeight = y.bandwidth();
-	const radiusScale = d3
-		.scaleSqrt()
-		.domain([0, maxValue])
-		.range([0, Math.min(cellWidth, cellHeight) / 2 - 5]);
-	const intensityScale = d3
-		.scaleSqrt()
-		.domain([0, maxValue])
-		.range([0, 1])
-		.clamp(true);
-	const intensityColor = (value: number) =>
-		d3.interpolateRgb(cellEmptyFill, cellHighFill)(intensityScale(value));
-
-	svg
+	const gradient = svg
 		.append("defs")
 		.append("linearGradient")
 		.attr("id", legendGradientId)
 		.attr("x1", "0%")
-		.attr("x2", "100%")
-		.call((gradient) => {
-			gradient
-				.append("stop")
-				.attr("offset", "0%")
-				.attr("stop-color", cellEmptyFill);
-			gradient
-				.append("stop")
-				.attr("offset", "100%")
-				.attr("stop-color", cellHighFill);
-		});
+		.attr("x2", "100%");
+	for (const [offset, color] of [
+		["0%", colors.lowCell],
+		["100%", colors.highCell],
+	] as const) {
+		gradient.append("stop").attr("offset", offset).attr("stop-color", color);
+	}
+
+	appendChartHeader(
+		svg,
+		"Des chaînes logistiques fortement concentrées",
+		"Chaque ligne suit un constructeur; chaque colonne montre où ses satellites sont lancés.",
+	);
 
 	const matrix = svg
 		.append("g")
 		.attr("transform", `translate(${matrixMargin.left}, ${matrixMargin.top})`);
 
-	matrix
-		.append("g")
-		.selectAll("g.row-label")
-		.data(flow.contractors)
-		.join("g")
-		.attr("class", "row-label")
-		.attr(
-			"transform",
-			(contractor) =>
-				`translate(0, ${(y(contractor.id) ?? 0) + cellHeight / 2})`,
-		)
-		.each(function (contractor) {
-			const g = d3.select(this);
-			const short = truncateLabel(contractor.label, rowLabelMaxChars);
-			g.append("text")
-				.attr("x", -16)
-				.attr("y", 0)
-				.attr("text-anchor", "end")
-				.attr("dominant-baseline", "middle")
-				.attr("fill", stagePalette.text)
-				.attr("font-size", chartTypography.legendLabel)
-				.attr("font-weight", 600)
-				.text(short);
-			if (short !== contractor.label) {
-				g.append("title").text(contractor.label);
-			}
-		});
+	appendSectionLabel(
+		svg,
+		"Constructeurs",
+		matrixMargin.left - 16,
+		matrixMargin.top - 36,
+		{ anchor: "end" },
+	);
+	appendSectionLabel(
+		svg,
+		"Sites de lancement",
+		matrixMargin.left + innerWidth / 2,
+		matrixMargin.top - 122,
+		{ anchor: "middle" },
+	);
 
-	matrix
+	const rowLabels = matrix
 		.append("g")
-		.selectAll("g.col-label")
+		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-row-label")
+		.data(flow.contractors)
+		.join("text")
+		.attr("class", "flow-row-label")
+		.attr("x", -16)
+		.attr("y", (_contractor, index) => index * stepY + cellHeight / 2)
+		.attr("dominant-baseline", "middle")
+		.attr("text-anchor", "end")
+		.attr("fill", stagePalette.text)
+		.attr("font-size", chartTypography.dataLabel)
+		.attr("font-weight", 600)
+		.text((contractor) =>
+			truncateLabel(contractor.label, layout.rowLabelChars),
+		);
+	rowLabels.append("title").text((contractor) => contractor.label);
+
+	const columnLabels = matrix
+		.append("g")
+		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-column-label")
 		.data(flow.sites)
-		.join("g")
-		.attr("class", "col-label")
+		.join("text")
+		.attr("class", "flow-column-label")
 		.attr(
 			"transform",
-			(site) =>
-				`translate(${(x(site.id) ?? 0) + cellWidth / 2}, -12) rotate(${columnLabelRotation})`,
+			(_site, index) =>
+				`translate(${index * stepX + cellWidth / 2}, -12) rotate(${layout.columnLabelRotation})`,
 		)
-		.each(function (site) {
-			const g = d3.select(this);
-			const short = truncateLabel(site.label, columnLabelMaxChars);
-			g.append("text")
-				.attr("x", 0)
-				.attr("y", 0)
-				.attr("text-anchor", "start")
-				.attr("dominant-baseline", "middle")
-				.attr("fill", stagePalette.text)
-				.attr("font-size", chartTypography.axisTick)
-				.attr("font-weight", 600)
-				.text(short);
-			if (short !== site.label) {
-				g.append("title").text(site.label);
-			}
-		});
+		.attr("dominant-baseline", "middle")
+		.attr("text-anchor", "start")
+		.attr("fill", stagePalette.text)
+		.attr("font-size", flowLabelFontSize)
+		.attr("font-weight", 600)
+		.text((site) => truncateLabel(site.label, layout.columnLabelChars));
+	columnLabels.append("title").text((site) => site.label);
 
 	const cellGroups = matrix
 		.append("g")
-		.selectAll<SVGGElement, MatrixCell>("g.matrix-cell")
+		.selectAll<SVGGElement, MatrixCell>(".matrix-cell")
 		.data(cells)
 		.join("g")
 		.attr("class", "matrix-cell")
 		.attr(
 			"transform",
-			(cell) =>
-				`translate(${x(cell.site.id) ?? 0}, ${y(cell.contractor.id) ?? 0})`,
+			(cell) => `translate(${cell.column * stepX}, ${cell.row * stepY})`,
 		)
-		.attr("tabindex", (cell) => (cell.value > 0 ? 0 : -1))
+		.attr("tabindex", 0)
 		.attr("role", "img")
+		.style("cursor", "pointer")
+		.style("outline", "none")
 		.attr(
 			"aria-label",
 			(cell) =>
 				`${cell.contractor.label} vers ${cell.site.label}: ${formatCount(cell.value)} satellites`,
-		)
-		.style("cursor", "pointer")
-		.style("outline", "none");
+		);
 
 	cellGroups
 		.append("title")
 		.text(
 			(cell) =>
-				`${cell.contractor.label} → ${cell.site.label} : ${formatCount(cell.value)} satellites`,
+				`${cell.contractor.label} → ${cell.site.label}: ${formatCount(cell.value)} satellites`,
 		);
 
 	cellGroups
 		.append("rect")
 		.attr("width", cellWidth)
 		.attr("height", cellHeight)
-		.attr("fill", (cell) => intensityColor(cell.value))
-		.attr("stroke", cellBorder)
+		.attr("rx", 4)
+		.attr("fill", (cell) => cellColor(cell.value))
+		.attr("fill-opacity", (cell) => (cell.value > 0 ? 0.88 : 0.54))
+		.attr("stroke", colors.cellBorder)
 		.attr("stroke-width", 1);
 
 	cellGroups
@@ -237,10 +238,46 @@ export function renderContractorFlow(
 		.attr("r", (cell) =>
 			cell.value === 0 ? 0 : Math.max(bubbleMinRadius, radiusScale(cell.value)),
 		)
-		.attr("fill", bubbleFill)
-		.attr("fill-opacity", 0.9)
-		.attr("stroke", bubbleStroke)
+		.attr("fill", "#081120")
+		.attr("fill-opacity", 0.92)
+		.attr("stroke", "rgba(226, 232, 240, 0.66)")
 		.attr("stroke-width", 1);
+
+	const rowTotals = matrix
+		.append("g")
+		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-row-total")
+		.data(flow.contractors)
+		.join("text")
+		.attr("class", "flow-row-total")
+		.attr("x", innerWidth + layout.rowTotalOffset)
+		.attr("y", (_contractor, index) => index * stepY + cellHeight / 2 + 4)
+		.attr("fill", stagePalette.muted)
+		.attr("font-size", flowLabelFontSize)
+		.attr("font-weight", 600)
+		.text((contractor) => formatCount(contractor.value));
+
+	const siteTotals = matrix
+		.append("g")
+		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-column-total")
+		.data(flow.sites)
+		.join("text")
+		.attr("class", "flow-column-total")
+		.attr("x", (_site, index) => index * stepX + cellWidth / 2)
+		.attr("y", innerHeight + 23)
+		.attr("text-anchor", "middle")
+		.attr("fill", stagePalette.muted)
+		.attr("font-size", flowLabelFontSize)
+		.attr("font-weight", 600)
+		.text((site) => formatCount(site.value));
+
+	appendAxisLabel(matrix, "Total par site", innerWidth / 2, innerHeight + 50);
+	appendAxisLabel(
+		matrix,
+		"Total par constructeur",
+		innerWidth + layout.rowTotalOffset,
+		-20,
+		{ anchor: "start" },
+	);
 
 	const highlight = (active: MatrixCell | null) => {
 		cellGroups
@@ -249,23 +286,46 @@ export function renderContractorFlow(
 			.duration(chartInteraction.duration)
 			.style("opacity", (cell) => {
 				if (!active) {
-					return chartInteraction.idle;
+					return cell.value > 0
+						? chartInteraction.idle
+						: chartInteraction.faint;
 				}
-				if (
-					cell.contractor.id === active.contractor.id ||
+				return cell.contractor.id === active.contractor.id ||
 					cell.site.id === active.site.id
-				) {
-					return chartInteraction.idle;
-				}
-				return chartInteraction.muted;
+					? chartInteraction.idle
+					: chartInteraction.muted;
 			});
+
+		const fade = (
+			selection: d3.Selection<
+				SVGTextElement,
+				FlowNodeDatum,
+				SVGGElement,
+				unknown
+			>,
+			activeId: string | undefined,
+		) => {
+			selection
+				.interrupt()
+				.transition()
+				.duration(chartInteraction.duration)
+				.style("opacity", (node) =>
+					!activeId || node.id === activeId
+						? chartInteraction.idle
+						: chartInteraction.softMuted,
+				);
+		};
+		fade(rowLabels, active?.contractor.id);
+		fade(rowTotals, active?.contractor.id);
+		fade(columnLabels, active?.site.id);
+		fade(siteTotals, active?.site.id);
 
 		cellGroups
 			.select<SVGRectElement>("rect")
-			.attr("stroke", (cell) =>
-				active && cell === active ? cellFocusStroke : cellBorder,
+			.style("stroke", (cell) =>
+				active && cell === active ? colors.activeStroke : colors.cellBorder,
 			)
-			.attr("stroke-width", (cell) => (active && cell === active ? 2 : 1));
+			.style("stroke-width", (cell) => (active && cell === active ? 2 : 1));
 	};
 
 	const presentCell = (cell: MatrixCell, event: PointerEvent | MouseEvent) => {
@@ -273,7 +333,20 @@ export function renderContractorFlow(
 		tooltip.show(
 			buildTooltip({
 				title: `${cell.contractor.label} → ${cell.site.label}`,
-				rows: [{ label: "Satellites lancés", value: formatCount(cell.value) }],
+				rows: [
+					{ label: "Satellites lancés", value: formatCount(cell.value) },
+					{
+						label: "Part du constructeur",
+						value: formatPercent(
+							cell.value / Math.max(1, cell.contractor.value),
+							1,
+						),
+					},
+					{
+						label: "Part du total",
+						value: formatPercent(cell.value / totalSatellites, 1),
+					},
+				],
 			}),
 			event,
 		);
@@ -282,48 +355,27 @@ export function renderContractorFlow(
 	cellGroups
 		.on("pointerenter", (event, cell) => presentCell(cell, event))
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+		.on("pointerleave blur", () => {
 			highlight(null);
 			tooltip.hide();
 		})
 		.on("focus", function handleFocus(_event, cell) {
-			const node = this as SVGGElement;
-			const rect = node.getBoundingClientRect();
-			const synthetic = new MouseEvent("focus", {
-				clientX: rect.left + rect.width / 2,
-				clientY: rect.top + rect.height / 2,
-			});
-			presentCell(cell, synthetic);
-		})
-		.on("blur", () => {
-			highlight(null);
-			tooltip.hide();
+			const rect = this.getBoundingClientRect();
+			presentCell(
+				cell,
+				new MouseEvent("focus", {
+					clientX: rect.left + rect.width / 2,
+					clientY: rect.top + rect.height / 2,
+				}),
+			);
 		});
-
-	appendChartHeader(
-		svg,
-		"Des chaînes logistiques fortement concentrées",
-		"La taille des bulles et l'éclat des cellules signalent les routes les plus chargées entre constructeurs et sites de lancement.",
-	);
-
-	const axisLabelY = matrixMargin.top + innerHeight + 30;
-
-	svg
-		.append("text")
-		.attr("x", matrixMargin.left + innerWidth / 2)
-		.attr("y", axisLabelY)
-		.attr("text-anchor", "middle")
-		.attr("fill", stagePalette.text)
-		.attr("font-size", chartTypography.axisLabel)
-		.attr("font-weight", 600)
-		.text("Site de lancement");
-
-	const legendX = width - matrixMargin.right - legendWidth;
-	const legendY = axisLabelY + 20;
 
 	const legend = svg
 		.append("g")
-		.attr("transform", `translate(${legendX}, ${legendY})`);
+		.attr(
+			"transform",
+			`translate(${matrixMargin.left + innerWidth - legendWidth}, ${matrixMargin.top + innerHeight + 66})`,
+		);
 
 	legend
 		.append("rect")
@@ -331,22 +383,20 @@ export function renderContractorFlow(
 		.attr("height", legendHeight)
 		.attr("rx", 4)
 		.attr("fill", `url(#${legendGradientId})`)
-		.attr("stroke", cellBorder);
+		.attr("stroke", colors.cellBorder)
+		.attr("stroke-width", 1);
 
 	legend
-		.append("text")
-		.attr("x", 0)
+		.selectAll("text")
+		.data([
+			{ label: "Faible volume", x: 0, anchor: "start" },
+			{ label: "Volume élevé", x: legendWidth, anchor: "end" },
+		] as const)
+		.join("text")
+		.attr("x", (label) => label.x)
 		.attr("y", legendHeight + 16)
+		.attr("text-anchor", (label) => label.anchor)
 		.attr("fill", stagePalette.muted)
-		.attr("font-size", chartTypography.annotation)
-		.text("Faible volume");
-
-	legend
-		.append("text")
-		.attr("x", legendWidth)
-		.attr("y", legendHeight + 16)
-		.attr("text-anchor", "end")
-		.attr("fill", stagePalette.muted)
-		.attr("font-size", chartTypography.annotation)
-		.text("Volume élevé");
+		.attr("font-size", flowLabelFontSize)
+		.text((label) => label.label);
 }

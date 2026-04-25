@@ -6,17 +6,15 @@ import {
 	chartInteraction,
 	chartMargins,
 } from "../helpers/chartFrame";
-import { formatCount, formatDecimal } from "../helpers/formatters";
+import { formatCount } from "../helpers/formatters";
 import { appendLegend } from "../helpers/legend";
-import { stagePalette } from "../helpers/palette";
 import type { TooltipController } from "../helpers/tooltip";
 import { buildTooltip } from "../helpers/tooltipContent";
-import type { ClusterMetric, YearSiteDatum } from "../types";
+import type { YearSiteDatum } from "../types";
 
 interface LaunchTimelineData {
 	sites: string[];
 	data: YearSiteDatum[];
-	clusters: ClusterMetric[];
 }
 
 export function renderLaunchTimeline(
@@ -72,14 +70,6 @@ export function renderLaunchTimeline(
 		])
 		.nice()
 		.range([innerHeight, 0]);
-	const clusterScale = d3
-		.scaleLinear()
-		.domain([
-			0,
-			d3.max(timeline.clusters, (item) => item.avgSatellitesPerLaunchDate) ?? 0,
-		])
-		.nice()
-		.range([innerHeight, 0]);
 	const color = d3
 		.scaleOrdinal<string, string>()
 		.domain(timeline.sites)
@@ -115,12 +105,6 @@ export function renderLaunchTimeline(
 		.call(d3.axisLeft(y).ticks(5))
 		.call((axis) => styleAxis(axis));
 
-	root
-		.append("g")
-		.attr("transform", `translate(${innerWidth}, 0)`)
-		.call(d3.axisRight(clusterScale).ticks(4))
-		.call((axis) => styleAxis(axis, { textColor: stagePalette.highlight }));
-
 	const bars = root
 		.selectAll(".launch-series")
 		.data(series)
@@ -151,54 +135,6 @@ export function renderLaunchTimeline(
 			tooltip.hide();
 		});
 
-	const line = d3
-		.line<ClusterMetric>()
-		.x((item) => (x(item.year) ?? 0) + x.bandwidth() / 2)
-		.y((item) => clusterScale(item.avgSatellitesPerLaunchDate))
-		.curve(d3.curveMonotoneX);
-
-	const clusterPath = root
-		.append("path")
-		.datum(timeline.clusters.filter((item) => item.year >= years[0]))
-		.attr("fill", "none")
-		.attr("stroke", stagePalette.highlight)
-		.attr("stroke-width", 3)
-		.attr("d", line);
-
-	const clusterPoints = root
-		.selectAll(".cluster-point")
-		.data(timeline.clusters)
-		.join("circle")
-		.attr("class", "cluster-point")
-		.attr("cx", (item) => (x(item.year) ?? 0) + x.bandwidth() / 2)
-		.attr("cy", (item) => clusterScale(item.avgSatellitesPerLaunchDate))
-		.attr("r", 4.5)
-		.attr("fill", stagePalette.highlight)
-		.on("pointerenter", (event, item) => {
-			highlightCluster(true);
-			tooltip.show(
-				buildTooltip({
-					title: `${item.year}`,
-					rows: [
-						{
-							label: "Satellites / date",
-							value: formatDecimal(item.avgSatellitesPerLaunchDate),
-						},
-						{
-							label: "Pic journalier",
-							value: formatCount(item.maxSatellitesOnSingleDate),
-						},
-					],
-				}),
-				event,
-			);
-		})
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
-			highlightCluster(false);
-			tooltip.hide();
-		});
-
 	function highlightSite(site: string | null) {
 		bars
 			.interrupt()
@@ -208,26 +144,6 @@ export function renderLaunchTimeline(
 				!site || item.key === site
 					? chartInteraction.idle
 					: chartInteraction.muted,
-			);
-	}
-
-	function highlightCluster(active: boolean) {
-		clusterPath
-			.interrupt()
-			.transition()
-			.duration(chartInteraction.duration)
-			.style(
-				"opacity",
-				active ? chartInteraction.active : chartInteraction.idle,
-			);
-
-		clusterPoints
-			.interrupt()
-			.transition()
-			.duration(chartInteraction.duration)
-			.style(
-				"opacity",
-				active ? chartInteraction.active : chartInteraction.idle,
 			);
 	}
 
@@ -250,19 +166,12 @@ export function renderLaunchTimeline(
 				onPointerEnter: () => highlightSite(site),
 				onPointerLeave: () => highlightSite(null),
 			})),
-			{
-				label: "Satellites par date de lancement",
-				color: stagePalette.highlight,
-				marker: { type: "line" as const },
-				onPointerEnter: () => highlightCluster(true),
-				onPointerLeave: () => highlightCluster(false),
-			},
 		],
 	});
 
 	appendChartHeader(
 		svg,
 		"Une accélération récente, tirée par quelques bases",
-		"Les barres suivent les sites dominants; la ligne souligne l'essor des lancements groupés.",
+		"Les barres suivent les sites dominants et isolent la concentration récente des volumes.",
 	);
 }

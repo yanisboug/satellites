@@ -19,6 +19,8 @@ export function createTooltip(container: HTMLElement): TooltipController {
 	tooltip.className = "viz-tooltip";
 	container.append(tooltip);
 	let lastPlacement: TooltipPlacement = "right";
+	let tooltipWidth = 0;
+	let tooltipHeight = 0;
 
 	const setPosition = (
 		event: PointerEvent | MouseEvent,
@@ -26,13 +28,20 @@ export function createTooltip(container: HTMLElement): TooltipController {
 	) => {
 		const placement = options?.placement ?? lastPlacement;
 		const offset = 16;
-		const maxLeft = window.innerWidth - tooltip.offsetWidth - 12;
-		const maxTop = window.innerHeight - tooltip.offsetHeight - 12;
+		const width = tooltipWidth || tooltip.offsetWidth;
+		const height = tooltipHeight || tooltip.offsetHeight;
+		const maxLeft = window.innerWidth - width - 12;
+		const maxTop = window.innerHeight - height - 12;
 		const preferredLeft =
 			placement === "left"
-				? event.clientX - tooltip.offsetWidth - offset
+				? event.clientX - width - offset
 				: event.clientX + offset;
-		const preferredTop = event.clientY + offset;
+		const preferredBelow = event.clientY + offset;
+		const preferredAbove = event.clientY - height - offset;
+		const preferredTop =
+			preferredBelow + height <= window.innerHeight - 12
+				? preferredBelow
+				: preferredAbove;
 		const left = Math.min(Math.max(12, preferredLeft), Math.max(12, maxLeft));
 		const top = Math.min(Math.max(12, preferredTop), Math.max(12, maxTop));
 
@@ -44,6 +53,8 @@ export function createTooltip(container: HTMLElement): TooltipController {
 		show(content, event, options) {
 			tooltip.innerHTML = content;
 			tooltip.dataset.visible = "true";
+			tooltipWidth = tooltip.offsetWidth;
+			tooltipHeight = tooltip.offsetHeight;
 			lastPlacement = options?.placement ?? "right";
 			setPosition(event, options);
 		},

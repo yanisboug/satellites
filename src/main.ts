@@ -4,6 +4,7 @@ import { renderAgeRidge } from "./charts/ageRidge";
 import { renderContractorBars } from "./charts/contractorBars";
 import { renderContractorFlow } from "./charts/contractorFlow";
 import { renderIntroScene } from "./charts/introScene";
+import { renderLaunchCadence } from "./charts/launchCadence";
 import { renderLaunchTimeline } from "./charts/launchTimeline";
 import { renderOperatorBubbles } from "./charts/operatorBubbles";
 import { renderOrbitScatter } from "./charts/orbitScatter";
@@ -66,6 +67,7 @@ function renderVisualizations(
 	mount("orbits", renderOrbitScatter, metrics.orbitScatter);
 	mount("orbit-types", renderOrbitTypeBars, metrics.orbitMissionMix);
 	mount("launches", renderLaunchTimeline, metrics.launchTimeline);
+	mount("launch-cadence", renderLaunchCadence, metrics.launchTimeline);
 	mount("flow", renderContractorFlow, metrics.flow);
 	mount("age", renderAgeRidge, metrics.ageGroups);
 }

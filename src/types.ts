@@ -114,6 +114,8 @@ export interface ClusterMetric {
 	year: number;
 	avgSatellitesPerLaunchDate: number;
 	maxSatellitesOnSingleDate: number;
+	totalLaunchDates: number;
+	groupedLaunchDates: number;
 }
 
 export interface FlowNodeDatum {

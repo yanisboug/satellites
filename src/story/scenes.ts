@@ -78,13 +78,22 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 			kicker: "Visualisation 6",
 			title: "L'expansion récente passe par quelques bases ultra-actives",
 			lede: `La hausse récente s'accélère, et les regroupements de satellites par date de lancement atteignent environ ${latestCluster?.avgSatellitesPerLaunchDate.toFixed(1) ?? "0"} satellites en moyenne lors des dernières années complètes.`,
-			body: "Les barres empilées donnent la répartition par site; la ligne superposée montre que l'ère des lancements groupés change aussi le rythme de croissance.",
+			body: "Les barres empilées donnent la répartition par site et gardent l'attention sur le volume annuel porté par les bases dominantes.",
 			accent:
-				"Le volume annuel grimpe, mais la densification des tirs grimpe aussi.",
+				"Le volume annuel grimpe surtout par quelques infrastructures clés.",
+		},
+		{
+			id: "launch-cadence",
+			kicker: "Visualisation 7",
+			title: "Le changement de rythme vient des lancements groupés",
+			lede: `Lors des dernières années complètes, environ ${formatCount(latestCluster?.groupedLaunchDates ?? 0)} lancements emportent plusieurs satellites actifs.`,
+			body: "Les deux lignes séparent le nombre de lancements observés et ceux qui regroupent au moins deux satellites. La comparaison rend la densification lisible sans surcharger la visualisation précédente.",
+			accent:
+				"Le nombre de tirs augmente, mais leur capacité à embarquer plusieurs satellites augmente aussi.",
 		},
 		{
 			id: "flow",
-			kicker: "Visualisation 7",
+			kicker: "Visualisation 8",
 			title: "Les constructeurs n'utilisent pas l'infrastructure au hasard",
 			lede: "La matrice croise les principaux fabricants avec leurs sites de lancement et révèle les couloirs logistiques dominants.",
 			body: "Plus la cellule s'assombrit et plus la bulle grossit, plus le couple constructeur-site est intense. Quelques cases captent l'essentiel du trafic.",
@@ -93,7 +102,7 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 		},
 		{
 			id: "age",
-			kicker: "Visualisation 8",
+			kicker: "Visualisation 9",
 			title: "Le parc orbital se renouvelle à des vitesses très différentes",
 			lede: `Les méga-constellations restent très jeunes, avec un âge médian d'environ ${megaGroup?.medianAge.toFixed(1) ?? "0"} ans.`,
 			body: "Le ridge plot croise l'âge, la durée de vie médiane et la part de satellites encore actifs au-delà de leur seuil théorique. Les formes racontent des stratégies industrielles différentes.",

@@ -3,12 +3,9 @@ import type { Selection } from "d3";
 import { appendSectionLabel, chartTypography } from "./chartFrame";
 import { stagePalette } from "./palette";
 
-type SvgParent = Selection<
-	SVGSVGElement | SVGGElement,
-	unknown,
-	null,
-	undefined
->;
+type SvgParent =
+	| Selection<SVGSVGElement, unknown, null, undefined>
+	| Selection<SVGGElement, unknown, null, undefined>;
 
 type LegendMarker =
 	| { type: "circle"; size?: number }
