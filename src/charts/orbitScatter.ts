@@ -21,7 +21,10 @@ export function renderOrbitScatter(
 	tooltip: TooltipController,
 ) {
 	const { width, height } = chartFrame;
-	const margin = chartMargins.scatter;
+	const margin = {
+		...chartMargins.scatter,
+		top: chartMargins.scatter.top + 18,
+	};
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const x = d3.scaleLog().domain([100, 400000]).range([0, innerWidth]);
@@ -70,8 +73,10 @@ export function renderOrbitScatter(
 
 	root
 		.append("text")
-		.attr("x", x(120000))
-		.attr("y", y(180000))
+		.attr("x", x(360000))
+		.attr("y", y(360000))
+		.attr("dy", "-0.7em")
+		.attr("text-anchor", "end")
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", chartTypography.annotation)
 		.text("apogée = périgée");
@@ -144,7 +149,7 @@ export function renderOrbitScatter(
 	);
 
 	appendAxisLabel(root, "Périgée (km)", innerWidth / 2, innerHeight + 58);
-	appendAxisLabel(root, "Apogée (km)", -innerHeight / 2, -60, {
+	appendAxisLabel(root, "Apogée (km)", -innerHeight / 2, -78, {
 		rotate: -90,
 	});
 }
