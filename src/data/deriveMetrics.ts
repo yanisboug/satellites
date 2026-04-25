@@ -376,61 +376,68 @@ function buildLaunchTimeline(satellites: NormalizedSatellite[]) {
 }
 
 function buildFlow(satellites: NormalizedSatellite[]) {
+	const OTHERS_LABEL = "Autres";
 	const contractorTotals = getTopCountEntries(
 		countBy(satellites, (satellite) => satellite.contractorLabel),
-		6,
+		8,
 	);
 	const contractorSet = new Set(contractorTotals.map(([name]) => name));
-	const filtered = satellites.filter((satellite) =>
-		contractorSet.has(satellite.contractorLabel),
-	);
 	const siteTotals = getTopCountEntries(
-		countBy(filtered, (satellite) => satellite.launchSiteLabel),
+		countBy(
+			satellites.filter((satellite) =>
+				contractorSet.has(satellite.contractorLabel),
+			),
+			(satellite) => satellite.launchSiteLabel,
+		),
 		6,
 	);
 	const siteSet = new Set(siteTotals.map(([name]) => name));
 	const linksMap = new Map<string, FlowLinkDatum>();
+	const contractorCounts = new Map<string, number>();
+	const siteCounts = new Map<string, number>();
 
-	for (const satellite of filtered) {
+	for (const satellite of satellites) {
+		const contractor = contractorSet.has(satellite.contractorLabel)
+			? satellite.contractorLabel
+			: OTHERS_LABEL;
 		const site = siteSet.has(satellite.launchSiteLabel)
 			? satellite.launchSiteLabel
-			: "Autres sites";
-		const key = `${satellite.contractorLabel}__${site}`;
+			: OTHERS_LABEL;
+		const key = `${contractor}__${site}`;
 		const current = linksMap.get(key) ?? {
-			source: satellite.contractorLabel,
+			source: contractor,
 			target: site,
 			value: 0,
 		};
 		current.value += 1;
 		linksMap.set(key, current);
+		contractorCounts.set(
+			contractor,
+			(contractorCounts.get(contractor) ?? 0) + 1,
+		);
+		siteCounts.set(site, (siteCounts.get(site) ?? 0) + 1);
 	}
 
-	const links = [...linksMap.values()]
-		.filter((link) => link.value >= 12)
-		.sort((left, right) => right.value - left.value);
-
-	const contractors: FlowNodeDatum[] = contractorTotals.map(
-		([label, value]) => ({
-			id: label,
-			label,
-			value,
-			side: "contractor",
-		}),
+	const contractorOrder = [
+		...contractorTotals.map(([name]) => name),
+		OTHERS_LABEL,
+	];
+	const siteOrder = [...siteTotals.map(([name]) => name), OTHERS_LABEL];
+	const contractors: FlowNodeDatum[] = contractorOrder.map((name) => ({
+		id: name,
+		label: name,
+		value: contractorCounts.get(name) ?? 0,
+		side: "contractor",
+	}));
+	const sites: FlowNodeDatum[] = siteOrder.map((name) => ({
+		id: name,
+		label: name,
+		value: siteCounts.get(name) ?? 0,
+		side: "site",
+	}));
+	const links = [...linksMap.values()].sort(
+		(left, right) => right.value - left.value,
 	);
-	const sites: FlowNodeDatum[] = [
-		...siteTotals,
-		["Autres sites", 0] as [string, number],
-	].map(([label]) => {
-		const value = links
-			.filter((link) => link.target === label)
-			.reduce((sum, link) => sum + link.value, 0);
-		return {
-			id: label,
-			label: label === "Autres sites" ? label : formatLaunchSiteLabel(label),
-			value,
-			side: "site" as const,
-		};
-	});
 
 	return { contractors, sites, links };
 }

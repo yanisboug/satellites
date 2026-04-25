@@ -86,8 +86,8 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 			id: "flow",
 			kicker: "Visualisation 7",
 			title: "Les constructeurs n'utilisent pas l'infrastructure au hasard",
-			lede: "Le diagramme de flux met en évidence des routes privilégiées entre fabricants et sites de lancement.",
-			body: "Quand un nœud s'illumine, on suit une chaîne logistique précise. Certaines entreprises dépendent clairement d'un nombre limité de bases.",
+			lede: "La matrice croise les principaux fabricants avec leurs sites de lancement et révèle les couloirs logistiques dominants.",
+			body: "Plus la cellule s'assombrit et plus la bulle grossit, plus le couple constructeur-site est intense. Quelques cases captent l'essentiel du trafic.",
 			accent:
 				"Le réseau de lancement est concentré autant que le marché lui-même.",
 		},

@@ -374,12 +374,23 @@ body::before {
 	max-width: min(100%, 1000px);
 	max-height: min(68vh, calc(100vh - 190px));
 	font-family: var(--font-sans);
+	overflow: visible;
 }
 
 .scene-layer--split .scene-viz svg {
 	width: 100%;
 	max-width: 1040px;
 	max-height: min(72vh, calc(100vh - 180px));
+}
+
+.scene-viz svg .matrix-cell:focus,
+.scene-viz svg .matrix-cell:focus-visible {
+	outline: none;
+}
+
+.scene-viz svg .matrix-cell:focus-visible > rect {
+	stroke: #fde68a;
+	stroke-width: 2;
 }
 
 /* ---------- Text card (glass overlay on the viz) ---------- */
