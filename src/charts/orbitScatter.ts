@@ -25,6 +25,7 @@ const symbolByClass = new Map<string, d3.SymbolType>([
 ]);
 
 const SYMBOL_AREA = 26;
+const HIT_RADIUS = 18;
 
 function symbolForClass(orbitClass: string) {
 	return symbolByClass.get(orbitClass) ?? d3.symbolCircle;
@@ -47,6 +48,11 @@ interface OrbitClassSummary {
 	medianApogee: number;
 }
 
+interface ProjectedOrbitDatum extends OrbitScatterDatum {
+	x: number;
+	y: number;
+}
+
 export function renderOrbitScatter(
 	container: HTMLElement,
 	data: OrbitScatterDatum[],
@@ -60,6 +66,11 @@ export function renderOrbitScatter(
 	const y = d3.scaleLog().domain([100, 400000]).range([innerHeight, 0]);
 	const classes = [...new Set(data.map((item) => item.classOrbit))];
 	const symbol = d3.symbol().size(SYMBOL_AREA);
+	const projectedData: ProjectedOrbitDatum[] = data.map((item) => ({
+		...item,
+		x: x(item.perigee),
+		y: y(item.apogee),
+	}));
 	const svg = d3
 		.select(container)
 		.append("svg")
@@ -137,50 +148,133 @@ export function renderOrbitScatter(
 		.attr("font-size", chartTypography.annotation)
 		.text("apogée = périgée");
 
-	const points = root
-		.append("g")
+	const imageCache = new Map<string, string>();
+	const symbolPaths = new Map<string, Path2D>();
+	const getSymbolPath = (orbitClass: string) => {
+		const cached = symbolPaths.get(orbitClass);
+		if (cached) {
+			return cached;
+		}
+		const pathData = symbol.type(symbolForClass(orbitClass))() ?? "";
+		const path = new Path2D(pathData);
+		symbolPaths.set(orbitClass, path);
+		return path;
+	};
+
+	const getScatterImage = (orbitClass: string | null) => {
+		const cacheKey = orbitClass ?? "__all";
+		const cached = imageCache.get(cacheKey);
+		if (cached) {
+			return cached;
+		}
+
+		const pixelRatio = window.devicePixelRatio || 1;
+		const canvas = document.createElement("canvas");
+		canvas.width = Math.ceil(innerWidth * pixelRatio);
+		canvas.height = Math.ceil(innerHeight * pixelRatio);
+
+		const context = canvas.getContext("2d");
+		if (!context) {
+			return "";
+		}
+
+		context.scale(pixelRatio, pixelRatio);
+		context.strokeStyle = stagePalette.background;
+		context.lineWidth = 0.5;
+
+		for (const item of projectedData) {
+			const isActive = !orbitClass || item.classOrbit === orbitClass;
+			context.globalAlpha = isActive
+				? orbitClass
+					? chartInteraction.idle
+					: 0.85
+				: chartInteraction.faint;
+			context.fillStyle = colorFromMap(orbitPalette, item.classOrbit);
+			context.save();
+			context.translate(item.x, item.y);
+			const path = getSymbolPath(item.classOrbit);
+			context.fill(path);
+			context.stroke(path);
+			context.restore();
+		}
+
+		const image = canvas.toDataURL("image/png");
+		imageCache.set(cacheKey, image);
+		return image;
+	};
+
+	const pointsImage = root
+		.append("image")
 		.attr("aria-hidden", "true")
-		.selectAll("path")
-		.data(data)
-		.join("path")
-		.attr(
-			"transform",
-			(item) => `translate(${x(item.perigee)}, ${y(item.apogee)})`,
-		)
-		.attr("d", (item) => symbol.type(symbolForClass(item.classOrbit))())
-		.attr("fill", (item) => colorFromMap(orbitPalette, item.classOrbit))
-		.attr("fill-opacity", 0.85)
-		.attr("stroke", stagePalette.background)
-		.attr("stroke-width", 0.5)
-		.on("pointerenter", (event, item) => {
-			tooltip.show(
-				buildTooltip({
-					title: item.name,
-					subtitle: `${item.classOrbit} / ${item.typeOrbit}`,
-					rows: [
-						{ label: "Périgée", value: formatKm(item.perigee) },
-						{ label: "Apogée", value: formatKm(item.apogee) },
-					],
-				}),
-				event,
-			);
+		.attr("x", 0)
+		.attr("y", 0)
+		.attr("width", innerWidth)
+		.attr("height", innerHeight)
+		.attr("href", getScatterImage(null));
+
+	const delaunay = d3.Delaunay.from(
+		projectedData,
+		(item) => item.x,
+		(item) => item.y,
+	);
+	let activePointIndex: number | null = null;
+
+	const hidePointTooltip = () => {
+		activePointIndex = null;
+		tooltip.hide();
+	};
+
+	const showPointTooltip = (event: PointerEvent) => {
+		const rootNode = root.node();
+		if (!rootNode || projectedData.length === 0) {
+			hidePointTooltip();
+			return;
+		}
+
+		const [pointerX, pointerY] = d3.pointer(event, rootNode);
+		const nearestIndex = delaunay.find(pointerX, pointerY);
+		const item = projectedData[nearestIndex];
+		const distance = Math.hypot(pointerX - item.x, pointerY - item.y);
+
+		if (distance > HIT_RADIUS) {
+			hidePointTooltip();
+			return;
+		}
+
+		if (activePointIndex === nearestIndex) {
+			tooltip.move(event);
+			return;
+		}
+
+		activePointIndex = nearestIndex;
+		tooltip.show(
+			buildTooltip({
+				title: item.name,
+				subtitle: `${item.classOrbit} / ${item.typeOrbit}`,
+				rows: [
+					{ label: "Périgée", value: formatKm(item.perigee) },
+					{ label: "Apogée", value: formatKm(item.apogee) },
+				],
+			}),
+			event,
+		);
+	};
+
+	root
+		.append("rect")
+		.attr("aria-hidden", "true")
+		.attr("x", 0)
+		.attr("y", 0)
+		.attr("width", innerWidth)
+		.attr("height", innerHeight)
+		.attr("fill", "transparent")
+		.on("pointermove", (event: PointerEvent) => {
+			showPointTooltip(event);
 		})
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => tooltip.hide());
+		.on("pointerleave", hidePointTooltip);
 
 	const updateHighlight = (orbitClass: string | null) => {
-		points
-			.interrupt()
-			.transition()
-			.duration(chartInteraction.duration)
-			.style("opacity", (item) => {
-				if (!orbitClass) {
-					return chartInteraction.pointIdle;
-				}
-				return item.classOrbit === orbitClass
-					? chartInteraction.idle
-					: chartInteraction.faint;
-			});
+		pointsImage.attr("href", getScatterImage(orbitClass));
 	};
 
 	const legend = svg

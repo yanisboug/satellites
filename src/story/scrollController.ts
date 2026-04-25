@@ -42,6 +42,8 @@ function applyLayerStyle(
 	style: SceneStyle,
 	interactive: boolean,
 ) {
+	layer.inert = !interactive;
+	layer.setAttribute("aria-hidden", String(!interactive));
 	layer.style.opacity = String(style.opacity);
 	layer.style.transform = `translate3d(0, 0, ${style.tz}px) scale(${style.scale})`;
 	layer.style.filter = `blur(${style.blur}px)`;
