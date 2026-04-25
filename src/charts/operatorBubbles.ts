@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import {
 	appendChartHeader,
@@ -172,20 +172,13 @@ export function renderOperatorBubbles(
 			(item) =>
 				`${item.name}, ${item.country} : ${formatCount(item.count)} satellites actifs (${formatPercent(item.share)} du parc)`,
 		)
-		.style("cursor", "pointer")
-		.on("pointerenter", (event, item) => showOperatorDetails(event, item))
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", clearOperatorDetails)
-		.on("focus", function handleFocus(_event, item) {
-			showOperatorDetails(focusEventFromElement(this), item);
-		})
-		.on("blur", clearOperatorDetails)
-		.on("keydown", function handleKeydown(event, item) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				showOperatorDetails(focusEventFromElement(this), item);
-			}
-		});
+		.style("cursor", "pointer");
+
+	bindTooltipInteractions(bubbleGroups, {
+		show: (event, item) => showOperatorDetails(event, item),
+		move: (event) => tooltip.move(event),
+		hide: clearOperatorDetails,
+	});
 
 	bubbleGroups
 		.append("circle")

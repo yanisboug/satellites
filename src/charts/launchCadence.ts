@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
@@ -225,28 +225,14 @@ export function renderLaunchCadence(
 		);
 	};
 
-	points
-		.on("pointerenter", function handlePointerEnter(event, item) {
-			showPointTooltip(event, item, this);
-		})
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+	bindTooltipInteractions(points, {
+		show: showPointTooltip,
+		move: (event) => tooltip.move(event),
+		hide: () => {
 			highlightSeries(null);
 			tooltip.hide();
-		})
-		.on("focus", function handleFocus(_event, item) {
-			showPointTooltip(focusEventFromElement(this), item, this);
-		})
-		.on("blur", () => {
-			highlightSeries(null);
-			tooltip.hide();
-		})
-		.on("keydown", function handleKeydown(event, item) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				showPointTooltip(focusEventFromElement(this), item, this);
-			}
-		});
+		},
+	});
 
 	function highlightSeries(
 		seriesId: CadenceSeries["id"] | null,

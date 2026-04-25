@@ -68,7 +68,6 @@ export const chartMargins = {
 export const chartInteraction = {
 	duration: 220,
 	idle: 1,
-	pointIdle: 0.82,
 	lineIdle: 0.55,
 	active: 0.95,
 	muted: 0.18,

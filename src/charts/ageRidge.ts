@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
@@ -263,7 +263,7 @@ export function renderAgeRidge(
 		);
 	};
 
-	groups
+	const hitAreas = groups
 		.append("rect")
 		.attr("x", 0)
 		.attr("y", -110)
@@ -278,26 +278,16 @@ export function renderAgeRidge(
 			(group) =>
 				`${group.label} : ${formatCount(group.total)} satellites, âge médian ${formatDecimal(group.medianAge)} ans, durée de vie médiane ${formatDecimal(group.medianLifetime)} ans, ${formatPercent(group.expiredShare)} au-delà de leur durée de vie attendue${group.cutoffCount > 0 ? `, ${formatCount(group.cutoffCount)} au-delà de ${AGE_CAP} ans` : ""}`,
 		)
-		.style("cursor", "pointer")
-		.on("pointerenter", (event, group) => showGroupTooltip(event, group))
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+		.style("cursor", "pointer");
+
+	bindTooltipInteractions(hitAreas, {
+		show: (event, group) => showGroupTooltip(event, group),
+		move: (event) => tooltip.move(event),
+		hide: () => {
 			highlight(null);
 			tooltip.hide();
-		})
-		.on("focus", function handleFocus(_event, group) {
-			showGroupTooltip(focusEventFromElement(this), group);
-		})
-		.on("blur", () => {
-			highlight(null);
-			tooltip.hide();
-		})
-		.on("keydown", function handleKeydown(event, group) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				showGroupTooltip(focusEventFromElement(this), group);
-			}
-		});
+		},
+	});
 
 	function highlight(groupId: string | null) {
 		groups

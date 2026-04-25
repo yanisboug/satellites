@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
@@ -120,7 +120,7 @@ export function renderContractorBars(
 		);
 	};
 
-	rows
+	const bars = rows
 		.append("rect")
 		.attr("class", "bar-fill")
 		.attr("width", (item) => x(item.count))
@@ -137,26 +137,16 @@ export function renderContractorBars(
 			(item) =>
 				`${item.name}, ${item.country} : ${formatCount(item.count)} satellites actifs (${formatPercent(item.share)} du parc)`,
 		)
-		.style("cursor", "pointer")
-		.on("pointerenter", (event, item) => showRowTooltip(event, item))
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+		.style("cursor", "pointer");
+
+	bindTooltipInteractions(bars, {
+		show: (event, item) => showRowTooltip(event, item),
+		move: (event) => tooltip.move(event),
+		hide: () => {
 			updateHighlight(null);
 			tooltip.hide();
-		})
-		.on("focus", function handleFocus(_event, item) {
-			showRowTooltip(focusEventFromElement(this), item);
-		})
-		.on("blur", () => {
-			updateHighlight(null);
-			tooltip.hide();
-		})
-		.on("keydown", function handleKeydown(event, item) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				showRowTooltip(focusEventFromElement(this), item);
-			}
-		});
+		},
+	});
 
 	const rowLabels = rows
 		.append("text")

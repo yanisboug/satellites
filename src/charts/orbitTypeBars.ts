@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
@@ -270,26 +270,14 @@ export function renderOrbitTypeBars(
 		);
 	};
 
-	segments
-		.on("pointerenter", (event, item) => showSegmentTooltip(event, item))
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+	bindTooltipInteractions(segments, {
+		show: (event, item) => showSegmentTooltip(event, item),
+		move: (event) => tooltip.move(event),
+		hide: () => {
 			highlight(null);
 			tooltip.hide();
-		})
-		.on("focus", function handleFocus(_event, item) {
-			showSegmentTooltip(focusEventFromElement(this), item);
-		})
-		.on("blur", () => {
-			highlight(null);
-			tooltip.hide();
-		})
-		.on("keydown", function handleKeydown(event, item) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				showSegmentTooltip(focusEventFromElement(this), item);
-			}
-		});
+		},
+	});
 
 	const shareLabels = root
 		.selectAll(".orbit-share-label")

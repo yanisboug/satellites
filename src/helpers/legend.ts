@@ -1,4 +1,4 @@
-import type { Selection } from "d3";
+import { type BaseType, type Selection, select } from "d3";
 
 import { appendSectionLabel, chartTypography } from "./chartFrame";
 import { stagePalette } from "./palette";
@@ -42,7 +42,7 @@ function getTextOffset(marker?: LegendMarker) {
 }
 
 function appendMarker(
-	group: Selection<SVGGElement, LegendItem, SVGGElement, unknown>,
+	group: Selection<SVGGElement, LegendItem, BaseType, unknown>,
 	item: LegendItem,
 ) {
 	const marker = item.marker;
@@ -97,7 +97,7 @@ export function appendLegend(parent: SvgParent, options: LegendOptions) {
 		appendSectionLabel(legend, title, 0, 0);
 	}
 
-	legend
+	const itemGroups = legend
 		.selectAll<SVGGElement, LegendItem>("g")
 		.data(items)
 		.join("g")
@@ -133,21 +133,20 @@ export function appendLegend(parent: SvgParent, options: LegendOptions) {
 				item.onPointerLeave?.();
 				(event.currentTarget as HTMLElement | null)?.blur();
 			}
-		})
-		.call((groups) => {
-			groups.each((item) => {
-				const group = groups.filter((datum) => datum === item);
-				appendMarker(group, item);
-
-				group
-					.append("text")
-					.attr("x", getTextOffset(item.marker))
-					.attr("y", 11)
-					.attr("fill", item.textColor ?? stagePalette.text)
-					.attr("font-size", chartTypography.legendLabel)
-					.text(item.label);
-			});
 		});
+
+	itemGroups.each(function appendLegendItem(item) {
+		const group = select<SVGGElement, LegendItem>(this);
+		appendMarker(group, item);
+
+		group
+			.append("text")
+			.attr("x", getTextOffset(item.marker))
+			.attr("y", 11)
+			.attr("fill", item.textColor ?? stagePalette.text)
+			.attr("font-size", chartTypography.legendLabel)
+			.text(item.label);
+	});
 
 	return legend;
 }

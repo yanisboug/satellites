@@ -1,4 +1,4 @@
-export const wong = {
+const wong = {
 	sky: "#56B4E9",
 	blue: "#0072B2",
 	green: "#009E73",

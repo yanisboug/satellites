@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import {
 	appendChartHeader,
@@ -99,26 +99,14 @@ export function renderUsageDonut(
 		);
 	};
 
-	slices
-		.on("pointerenter", (event, item) => showSliceTooltip(event, item))
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+	bindTooltipInteractions(slices, {
+		show: (event, item) => showSliceTooltip(event, item),
+		move: (event) => tooltip.move(event),
+		hide: () => {
 			highlight(null);
 			tooltip.hide();
-		})
-		.on("focus", function handleFocus(_event, item) {
-			showSliceTooltip(focusEventFromElement(this), item);
-		})
-		.on("blur", () => {
-			highlight(null);
-			tooltip.hide();
-		})
-		.on("keydown", function handleKeydown(event, item) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				showSliceTooltip(focusEventFromElement(this), item);
-			}
-		});
+		},
+	});
 
 	const labels = stage
 		.selectAll(".donut-label")

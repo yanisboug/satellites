@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import {
 	appendDataTable,
 	appendFigureDescription,
-	focusEventFromElement,
+	bindTooltipInteractions,
 } from "../helpers/a11y";
 import {
 	appendAxisLabel,
@@ -354,26 +354,14 @@ export function renderContractorFlow(
 		);
 	};
 
-	cellGroups
-		.on("pointerenter", (event, cell) => presentCell(cell, event))
-		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", () => {
+	bindTooltipInteractions(cellGroups, {
+		show: (event, cell) => presentCell(cell, event),
+		move: (event) => tooltip.move(event),
+		hide: () => {
 			highlight(null);
 			tooltip.hide();
-		})
-		.on("focus", function handleFocus(_event, cell) {
-			presentCell(cell, focusEventFromElement(this));
-		})
-		.on("blur", () => {
-			highlight(null);
-			tooltip.hide();
-		})
-		.on("keydown", function handleKeydown(event, cell) {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				presentCell(cell, focusEventFromElement(this));
-			}
-		});
+		},
+	});
 
 	const legend = svg
 		.append("g")

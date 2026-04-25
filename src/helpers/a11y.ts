@@ -1,4 +1,4 @@
-import type { Selection } from "d3";
+import type { BaseType, Selection } from "d3";
 
 let idCounter = 0;
 function uid(prefix: string) {
@@ -129,43 +129,66 @@ export function appendDataTable<T>({
 	return { wrapper, table };
 }
 
-interface InteractiveOptions<Datum> {
-	role?: "button" | "gridcell" | "img";
-	label: (datum: Datum) => string;
-	onActivate?: (datum: Datum, event: KeyboardEvent | MouseEvent) => void;
-}
-
-export function makeInteractive<
-	GElement extends Element,
-	Datum,
-	PElement extends Element,
-	PDatum,
->(
-	selection: Selection<GElement, Datum, PElement, PDatum>,
-	options: InteractiveOptions<Datum>,
-) {
-	selection
-		.attr("tabindex", 0)
-		.attr("role", options.role ?? "button")
-		.attr("aria-label", (datum) => options.label(datum));
-
-	if (options.onActivate) {
-		const onActivate = options.onActivate;
-		selection.on("keydown", (event: KeyboardEvent, datum: Datum) => {
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				onActivate(datum, event);
-			}
-		});
-	}
-
-	return selection;
-}
-
-export function focusEventFromElement(element: Element): MouseEvent {
+function focusEventFromElement(element: Element): MouseEvent {
 	const rect = element.getBoundingClientRect();
 	return new MouseEvent("focus", {
 		clientX: rect.left + rect.width / 2,
 		clientY: rect.top + rect.height / 2,
 	});
+}
+
+interface TooltipInteractionOptions<GElement extends Element, Datum> {
+	show: (
+		event: PointerEvent | MouseEvent,
+		datum: Datum,
+		element: GElement,
+	) => void;
+	move?: (event: PointerEvent) => void;
+	hide: () => void;
+}
+
+export function bindTooltipInteractions<
+	GElement extends Element,
+	Datum,
+	PElement extends BaseType,
+	PDatum,
+>(
+	selection: Selection<GElement, Datum, PElement, PDatum>,
+	{ show, move, hide }: TooltipInteractionOptions<GElement, Datum>,
+) {
+	return selection
+		.on(
+			"pointerenter",
+			function handlePointerEnter(
+				this: GElement,
+				event: PointerEvent,
+				datum: Datum,
+			) {
+				show(event, datum, this);
+			},
+		)
+		.on("pointermove", (event: PointerEvent) => {
+			move?.(event);
+		})
+		.on("pointerleave", hide)
+		.on(
+			"focus",
+			function handleFocus(this: GElement, _event: FocusEvent, datum: Datum) {
+				show(focusEventFromElement(this), datum, this);
+			},
+		)
+		.on("blur", hide)
+		.on(
+			"keydown",
+			function handleKeydown(
+				this: GElement,
+				event: KeyboardEvent,
+				datum: Datum,
+			) {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					show(focusEventFromElement(this), datum, this);
+				}
+			},
+		);
 }
