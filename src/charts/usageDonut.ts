@@ -1,5 +1,10 @@
 import * as d3 from "d3";
 import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
+import {
 	appendChartHeader,
 	appendSectionLabel,
 	chartFrame,
@@ -35,38 +40,84 @@ export function renderUsageDonut(
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Répartition des satellites selon leur usage");
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const totalCount = d3.sum(data, (item) => item.count) || 1;
+	const sortedShares = [...data].sort(
+		(left, right) => right.share - left.share,
+	);
+	const top = sortedShares[0];
+	const others = sortedShares.slice(1);
+	const description = top
+		? `${top.label} domine avec ${formatPercent(top.share)} du parc (${formatCount(top.count)} satellites). Suivent ${others
+				.map((item) => `${item.label} à ${formatPercent(item.share)}`)
+				.join(", ")}. Total : ${formatCount(totalCount)} satellites.`
+		: "Répartition des satellites selon leur usage principal.";
+
+	appendFigureDescription({
+		svg,
+		title: "Répartition des satellites selon leur usage principal",
+		description,
+	});
+
 	const stage = svg
 		.append("g")
 		.attr("transform", `translate(${width / 2}, ${height / 2 + 16})`);
 
 	const slices = stage
-		.selectAll("path")
+		.selectAll<SVGPathElement, d3.PieArcDatum<ShareDatum>>("path")
 		.data(arcs)
 		.join("path")
 		.attr("d", arc)
 		.attr("fill", (item) => colorFromMap(usagePalette, item.data.label))
 		.attr("stroke", "#081120")
 		.attr("stroke-width", 2)
-		.on("pointerenter", (event, item) => {
-			highlight(item.data.label);
-			tooltip.show(
-				buildTooltip({
-					title: item.data.label,
-					rows: [
-						{ label: "Satellites", value: formatCount(item.data.count) },
-						{ label: "Part du total", value: formatPercent(item.data.share) },
-					],
-				}),
-				event,
-			);
-		})
+		.attr("tabindex", 0)
+		.attr("role", "button")
+		.attr("aria-describedby", tooltip.id)
+		.attr(
+			"aria-label",
+			(item) =>
+				`${item.data.label} : ${formatCount(item.data.count)} satellites, soit ${formatPercent(item.data.share)} du total`,
+		)
+		.style("cursor", "pointer");
+
+	const showSliceTooltip = (
+		event: PointerEvent | MouseEvent,
+		item: d3.PieArcDatum<ShareDatum>,
+	) => {
+		highlight(item.data.label);
+		tooltip.show(
+			buildTooltip({
+				title: item.data.label,
+				rows: [
+					{ label: "Satellites", value: formatCount(item.data.count) },
+					{ label: "Part du total", value: formatPercent(item.data.share) },
+				],
+			}),
+			event,
+		);
+	};
+
+	slices
+		.on("pointerenter", (event, item) => showSliceTooltip(event, item))
 		.on("pointermove", (event) => tooltip.move(event))
 		.on("pointerleave", () => {
 			highlight(null);
 			tooltip.hide();
+		})
+		.on("focus", function handleFocus(_event, item) {
+			showSliceTooltip(focusEventFromElement(this), item);
+		})
+		.on("blur", () => {
+			highlight(null);
+			tooltip.hide();
+		})
+		.on("keydown", function handleKeydown(event, item) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				showSliceTooltip(focusEventFromElement(this), item);
+			}
 		});
 
 	const labels = stage
@@ -74,6 +125,7 @@ export function renderUsageDonut(
 		.data(arcs)
 		.join("text")
 		.attr("class", "donut-label")
+		.attr("aria-hidden", "true")
 		.attr("transform", (item) => `translate(${labelArc.centroid(item)})`)
 		.attr("text-anchor", "middle")
 		.attr("fill", stagePalette.text)
@@ -107,6 +159,7 @@ export function renderUsageDonut(
 
 	stage
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("text-anchor", "middle")
 		.attr("y", 24)
 		.attr("fill", stagePalette.text)
@@ -116,6 +169,7 @@ export function renderUsageDonut(
 
 	stage
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("text-anchor", "middle")
 		.attr("y", 52)
 		.attr("fill", stagePalette.muted)
@@ -127,4 +181,22 @@ export function renderUsageDonut(
 		"L'orbite sert d'abord le marché",
 		"Les usages commerciaux écrasent largement les segments militaires et mixtes.",
 	);
+
+	appendDataTable({
+		container,
+		caption: "Répartition des satellites selon leur usage principal",
+		summary: description,
+		columns: [
+			{ header: "Usage", accessor: (row: ShareDatum) => row.label },
+			{
+				header: "Satellites",
+				accessor: (row: ShareDatum) => formatCount(row.count),
+			},
+			{
+				header: "Part du total",
+				accessor: (row: ShareDatum) => formatPercent(row.share),
+			},
+		],
+		rows: data,
+	});
 }

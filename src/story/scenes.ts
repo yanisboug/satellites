@@ -18,6 +18,21 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 	const latestCluster =
 		metrics.launchTimeline.clusters.at(-2) ??
 		metrics.launchTimeline.clusters.at(-1);
+	const latestYear = latestCluster?.year;
+	const latestYearRows = latestYear
+		? metrics.launchTimeline.data.filter((row) => row.year === latestYear)
+		: [];
+	const latestYearTotal = latestYearRows.reduce(
+		(sum, row) => sum + row.count,
+		0,
+	);
+	const dominantSiteRow = [...latestYearRows].sort(
+		(left, right) => right.count - left.count,
+	)[0];
+	const dominantSiteShare =
+		dominantSiteRow && latestYearTotal > 0
+			? dominantSiteRow.count / latestYearTotal
+			: 0;
 	const megaGroup = metrics.ageGroups.find((group) => group.id === "mega");
 
 	return [
@@ -77,7 +92,10 @@ export function buildScenes(metrics: DerivedMetrics): StoryScene[] {
 			id: "launches",
 			kicker: "Visualisation 6",
 			title: "L'expansion récente passe par quelques bases ultra-actives",
-			lede: `La hausse récente s'accélère, et les regroupements de satellites par date de lancement atteignent environ ${latestCluster?.avgSatellitesPerLaunchDate.toFixed(1) ?? "0"} satellites en moyenne lors des dernières années complètes.`,
+			lede:
+				latestYear && dominantSiteRow
+					? `En ${latestYear}, ${formatCount(latestYearTotal)} satellites ont été lancés depuis l'ensemble des bases, dont ${formatPercent(dominantSiteShare)} pour le seul site de ${dominantSiteRow.label}.`
+					: "La hausse récente s'accélère, portée par un petit nombre de bases qui concentrent l'essentiel du volume annuel.",
 			body: "Les barres empilées donnent la répartition par site et gardent l'attention sur le volume annuel porté par les bases dominantes.",
 			accent:
 				"Le volume annuel grimpe surtout par quelques infrastructures clés.",

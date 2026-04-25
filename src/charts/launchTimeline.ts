@@ -1,4 +1,9 @@
 import * as d3 from "d3";
+import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
 	appendChartHeader,
@@ -8,6 +13,7 @@ import {
 } from "../helpers/chartFrame";
 import { formatCount } from "../helpers/formatters";
 import { appendLegend } from "../helpers/legend";
+import { stagePalette } from "../helpers/palette";
 import type { TooltipController } from "../helpers/tooltip";
 import { buildTooltip } from "../helpers/tooltipContent";
 import type { YearSiteDatum } from "../types";
@@ -15,6 +21,21 @@ import type { YearSiteDatum } from "../types";
 interface LaunchTimelineData {
 	sites: string[];
 	data: YearSiteDatum[];
+}
+
+const SITE_PALETTE = [
+	"#56B4E9",
+	"#E69F00",
+	"#009E73",
+	"#D55E00",
+	"#CC79A7",
+	"#F0E442",
+];
+
+interface YearAggregate {
+	year: number;
+	total: number;
+	bySite: Record<string, number>;
 }
 
 export function renderLaunchTimeline(
@@ -73,19 +94,56 @@ export function renderLaunchTimeline(
 	const color = d3
 		.scaleOrdinal<string, string>()
 		.domain(timeline.sites)
-		.range(["#2a9d8f", "#457b9d", "#e76f51", "#7a5195", "#e9c46a", "#64748b"]);
+		.range(SITE_PALETTE);
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Evolution des lancements par site");
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const aggregates: YearAggregate[] = stackedRows.map((row) => {
+		const bySite: Record<string, number> = {};
+		let total = 0;
+		for (const site of timeline.sites) {
+			const value = row[site] ?? 0;
+			bySite[site] = value;
+			total += value;
+		}
+		return { year: row.year, total, bySite };
+	});
+	const totalsBySite = new Map<string, number>();
+	for (const site of timeline.sites) {
+		totalsBySite.set(
+			site,
+			aggregates.reduce((sum, year) => sum + (year.bySite[site] ?? 0), 0),
+		);
+	}
+	const overallTotal =
+		[...totalsBySite.values()].reduce((sum, value) => sum + value, 0) || 1;
+	const dominantSite = [...totalsBySite.entries()].sort(
+		(left, right) => right[1] - left[1],
+	)[0];
+	const peakYear = aggregates.reduce<YearAggregate | null>((acc, item) => {
+		if (!acc || item.total > acc.total) return item;
+		return acc;
+	}, null);
+	const description =
+		dominantSite && peakYear
+			? `Entre ${years[0]} et ${years.at(-1)}, ${formatCount(overallTotal)} satellites ont été lancés depuis ${timeline.sites.length} sites. Le pic annuel est atteint en ${peakYear.year} avec ${formatCount(peakYear.total)} satellites. Site dominant : ${siteLabels.get(dominantSite[0]) ?? dominantSite[0]} avec ${formatCount(dominantSite[1])} satellites (${Math.round((dominantSite[1] / overallTotal) * 100)} %).`
+			: "Évolution annuelle des lancements par site.";
+
+	appendFigureDescription({
+		svg,
+		title: "Lancements annuels empilés par site de lancement",
+		description,
+	});
+
 	const root = svg
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
 
 	const xAxis = root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(
 			d3
@@ -102,37 +160,83 @@ export function renderLaunchTimeline(
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.call(d3.axisLeft(y).ticks(5))
 		.call((axis) => styleAxis(axis));
+
+	interface StackedSegment {
+		key: string;
+		year: number;
+		count: number;
+		y0: number;
+		y1: number;
+	}
+
+	const showSegmentTooltip = (
+		event: PointerEvent | MouseEvent,
+		item: StackedSegment,
+	) => {
+		highlightSite(item.key);
+		tooltip.show(
+			buildTooltip({
+				title: siteLabels.get(item.key) ?? item.key,
+				subtitle: `${item.year}`,
+				rows: [{ label: "Satellites", value: formatCount(item.count) }],
+			}),
+			event,
+		);
+	};
 
 	const bars = root
 		.selectAll(".launch-series")
 		.data(series)
 		.join("g")
+		.attr("class", "launch-series")
 		.attr("fill", (item) => color(item.key))
-		.selectAll("rect")
-		.data((item) => item.map((segment) => ({ ...segment, key: item.key })))
+		.selectAll<SVGRectElement, StackedSegment>("rect")
+		.data((item) =>
+			item.map<StackedSegment>((segment) => ({
+				key: item.key,
+				year: segment.data.year,
+				count: segment.data[item.key] ?? 0,
+				y0: segment[0],
+				y1: segment[1],
+			})),
+		)
 		.join("rect")
-		.attr("x", (item) => x(item.data.year) ?? 0)
-		.attr("y", (item) => y(item[1]))
+		.attr("x", (item) => x(item.year) ?? 0)
+		.attr("y", (item) => y(item.y1))
 		.attr("width", x.bandwidth())
-		.attr("height", (item) => y(item[0]) - y(item[1]))
-		.on("pointerenter", (event, item) => {
-			highlightSite(item.key);
-			const count = item.data[item.key] ?? 0;
-			tooltip.show(
-				buildTooltip({
-					title: siteLabels.get(item.key) ?? item.key,
-					subtitle: `${item.data.year}`,
-					rows: [{ label: "Satellites", value: formatCount(count) }],
-				}),
-				event,
-			);
-		})
+		.attr("height", (item) => Math.max(0, y(item.y0) - y(item.y1)))
+		.attr("stroke", stagePalette.background)
+		.attr("stroke-width", (item) => (item.count > 0 ? 1 : 0))
+		.attr("tabindex", (item) => (item.count > 0 ? 0 : null))
+		.attr("role", (item) => (item.count > 0 ? "button" : null))
+		.attr("aria-describedby", tooltip.id)
+		.attr("aria-label", (item) =>
+			item.count > 0
+				? `${siteLabels.get(item.key) ?? item.key}, ${item.year} : ${formatCount(item.count)} satellites`
+				: null,
+		)
+		.style("cursor", (item) => (item.count > 0 ? "pointer" : "default"))
+		.on("pointerenter", (event, item) => showSegmentTooltip(event, item))
 		.on("pointermove", (event) => tooltip.move(event))
 		.on("pointerleave", () => {
 			highlightSite(null);
 			tooltip.hide();
+		})
+		.on("focus", function handleFocus(_event, item) {
+			showSegmentTooltip(focusEventFromElement(this), item);
+		})
+		.on("blur", () => {
+			highlightSite(null);
+			tooltip.hide();
+		})
+		.on("keydown", function handleKeydown(event, item) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				showSegmentTooltip(focusEventFromElement(this), item);
+			}
 		});
 
 	function highlightSite(site: string | null) {
@@ -174,4 +278,22 @@ export function renderLaunchTimeline(
 		"Une accélération récente, tirée par quelques bases",
 		"Les barres suivent les sites dominants et isolent la concentration récente des volumes.",
 	);
+
+	appendDataTable({
+		container,
+		caption: "Lancements annuels par site de lancement",
+		summary: description,
+		columns: [
+			{ header: "Année", accessor: (row: YearAggregate) => row.year },
+			...timeline.sites.map((site) => ({
+				header: siteLabels.get(site) ?? site,
+				accessor: (row: YearAggregate) => formatCount(row.bySite[site] ?? 0),
+			})),
+			{
+				header: "Total",
+				accessor: (row: YearAggregate) => formatCount(row.total),
+			},
+		],
+		rows: aggregates,
+	});
 }

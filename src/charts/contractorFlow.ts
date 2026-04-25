@@ -1,5 +1,10 @@
 import * as d3 from "d3";
 import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
+import {
 	appendAxisLabel,
 	appendChartHeader,
 	appendSectionLabel,
@@ -35,22 +40,22 @@ const layout = {
 	columnLabelRotation: -48,
 	rowTotalOffset: 24,
 	rowLabelChars: 34,
-	columnLabelChars: 22,
+	columnLabelChars: 16,
 };
 
 const colors = {
 	emptyCell: "#101a2c",
-	lowCell: "#162338",
+	lowCell: "#1e2c44",
 	highCell: stagePalette.highlight,
 	cellBorder: "rgba(148, 163, 184, 0.18)",
 	activeStroke: "#fde68a",
 };
 
-const bubbleMinRadius = 2.5;
 const legendGradientId = "contractor-flow-volume-gradient";
 const legendWidth = 210;
 const legendHeight = 8;
 const flowLabelFontSize = 12;
+const cellAnnotationThreshold = 0.18;
 
 function truncateLabel(value: string, maxLen: number) {
 	const trimmed = value.trim();
@@ -79,7 +84,7 @@ export function renderContractorFlow(
 	const valueByRoute = new Map(
 		flow.links.map((link) => [`${link.source}__${link.target}`, link.value]),
 	);
-	const cells = flow.contractors.flatMap((contractor, row) =>
+	const cells: MatrixCell[] = flow.contractors.flatMap((contractor, row) =>
 		flow.sites.map((site, column) => ({
 			contractor,
 			site,
@@ -91,10 +96,6 @@ export function renderContractorFlow(
 	const totalSatellites =
 		d3.sum(flow.contractors, (contractor) => contractor.value) || 1;
 	const maxValue = d3.max(cells, (cell) => cell.value) ?? 0;
-	const radiusScale = d3
-		.scaleSqrt()
-		.domain([0, maxValue])
-		.range([0, Math.max(0, Math.min(cellWidth, cellHeight) / 2 - 5)]);
 	const intensityScale = d3
 		.scaleSqrt()
 		.domain([0, maxValue])
@@ -107,17 +108,29 @@ export function renderContractorFlow(
 					colors.lowCell,
 					colors.highCell,
 				)(intensityScale(value));
+	const annotationColor = (value: number) =>
+		intensityScale(value) > 0.55 ? "#0b1220" : stagePalette.text;
 
 	const svg = d3
 		.select(container)
 		.append("svg")
 		.attr("viewBox", `0 0 ${width} ${height}`)
-		.style("overflow", "visible")
-		.attr("role", "img")
-		.attr(
-			"aria-label",
-			"Matrice de correspondance entre constructeurs et sites de lancement",
-		);
+		.style("overflow", "visible");
+
+	const dominantContractor = [...flow.contractors].sort(
+		(left, right) => right.value - left.value,
+	)[0];
+	const topCell = [...cells].sort((left, right) => right.value - left.value)[0];
+	const description =
+		dominantContractor && topCell
+			? `Matrice ${flow.contractors.length} constructeurs × ${flow.sites.length} sites de lancement, total ${formatCount(totalSatellites)} satellites. Constructeur le plus actif : ${dominantContractor.label} avec ${formatCount(dominantContractor.value)} satellites. Couplage le plus fort : ${topCell.contractor.label} → ${topCell.site.label} avec ${formatCount(topCell.value)} satellites (${formatPercent(topCell.value / totalSatellites, 1)} du total).`
+			: "Matrice de correspondance entre constructeurs et sites de lancement.";
+
+	appendFigureDescription({
+		svg,
+		title: "Constructeurs × sites de lancement (matrice de flux)",
+		description,
+	});
 
 	const gradient = svg
 		.append("defs")
@@ -144,13 +157,6 @@ export function renderContractorFlow(
 
 	appendSectionLabel(
 		svg,
-		"Constructeurs",
-		matrixMargin.left - 16,
-		matrixMargin.top - 36,
-		{ anchor: "end" },
-	);
-	appendSectionLabel(
-		svg,
 		"Sites de lancement",
 		matrixMargin.left + innerWidth / 2,
 		matrixMargin.top - 122,
@@ -159,6 +165,7 @@ export function renderContractorFlow(
 
 	const rowLabels = matrix
 		.append("g")
+		.attr("aria-hidden", "true")
 		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-row-label")
 		.data(flow.contractors)
 		.join("text")
@@ -177,6 +184,7 @@ export function renderContractorFlow(
 
 	const columnLabels = matrix
 		.append("g")
+		.attr("aria-hidden", "true")
 		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-column-label")
 		.data(flow.sites)
 		.join("text")
@@ -205,24 +213,19 @@ export function renderContractorFlow(
 			(cell) => `translate(${cell.column * stepX}, ${cell.row * stepY})`,
 		)
 		.attr("tabindex", 0)
-		.attr("role", "img")
+		.attr("role", "button")
+		.attr("aria-describedby", tooltip.id)
 		.style("cursor", "pointer")
 		.style("outline", "none")
-		.attr(
-			"aria-label",
-			(cell) =>
-				`${cell.contractor.label} vers ${cell.site.label}: ${formatCount(cell.value)} satellites`,
-		);
-
-	cellGroups
-		.append("title")
-		.text(
-			(cell) =>
-				`${cell.contractor.label} → ${cell.site.label}: ${formatCount(cell.value)} satellites`,
+		.attr("aria-label", (cell) =>
+			cell.value > 0
+				? `${cell.contractor.label} vers ${cell.site.label} : ${formatCount(cell.value)} satellites (${formatPercent(cell.value / Math.max(1, cell.contractor.value), 1)} du constructeur)`
+				: `${cell.contractor.label} vers ${cell.site.label} : aucun satellite`,
 		);
 
 	cellGroups
 		.append("rect")
+		.attr("aria-hidden", "true")
 		.attr("width", cellWidth)
 		.attr("height", cellHeight)
 		.attr("rx", 4)
@@ -232,19 +235,24 @@ export function renderContractorFlow(
 		.attr("stroke-width", 1);
 
 	cellGroups
-		.append("circle")
-		.attr("cx", cellWidth / 2)
-		.attr("cy", cellHeight / 2)
-		.attr("r", (cell) =>
-			cell.value === 0 ? 0 : Math.max(bubbleMinRadius, radiusScale(cell.value)),
+		.filter(
+			(cell) =>
+				cell.value > 0 && intensityScale(cell.value) >= cellAnnotationThreshold,
 		)
-		.attr("fill", "#081120")
-		.attr("fill-opacity", 0.92)
-		.attr("stroke", "rgba(226, 232, 240, 0.66)")
-		.attr("stroke-width", 1);
+		.append("text")
+		.attr("aria-hidden", "true")
+		.attr("x", cellWidth / 2)
+		.attr("y", cellHeight / 2)
+		.attr("text-anchor", "middle")
+		.attr("dominant-baseline", "central")
+		.attr("font-size", flowLabelFontSize)
+		.attr("font-weight", 600)
+		.attr("fill", (cell) => annotationColor(cell.value))
+		.text((cell) => formatCount(cell.value));
 
 	const rowTotals = matrix
 		.append("g")
+		.attr("aria-hidden", "true")
 		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-row-total")
 		.data(flow.contractors)
 		.join("text")
@@ -258,6 +266,7 @@ export function renderContractorFlow(
 
 	const siteTotals = matrix
 		.append("g")
+		.attr("aria-hidden", "true")
 		.selectAll<SVGTextElement, FlowNodeDatum>(".flow-column-total")
 		.data(flow.sites)
 		.join("text")
@@ -271,13 +280,6 @@ export function renderContractorFlow(
 		.text((site) => formatCount(site.value));
 
 	appendAxisLabel(matrix, "Total par site", innerWidth / 2, innerHeight + 50);
-	appendAxisLabel(
-		matrix,
-		"Total par constructeur",
-		innerWidth + layout.rowTotalOffset,
-		-20,
-		{ anchor: "start" },
-	);
 
 	const highlight = (active: MatrixCell | null) => {
 		cellGroups
@@ -355,19 +357,22 @@ export function renderContractorFlow(
 	cellGroups
 		.on("pointerenter", (event, cell) => presentCell(cell, event))
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave blur", () => {
+		.on("pointerleave", () => {
 			highlight(null);
 			tooltip.hide();
 		})
 		.on("focus", function handleFocus(_event, cell) {
-			const rect = this.getBoundingClientRect();
-			presentCell(
-				cell,
-				new MouseEvent("focus", {
-					clientX: rect.left + rect.width / 2,
-					clientY: rect.top + rect.height / 2,
-				}),
-			);
+			presentCell(cell, focusEventFromElement(this));
+		})
+		.on("blur", () => {
+			highlight(null);
+			tooltip.hide();
+		})
+		.on("keydown", function handleKeydown(event, cell) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				presentCell(cell, focusEventFromElement(this));
+			}
 		});
 
 	const legend = svg
@@ -379,6 +384,7 @@ export function renderContractorFlow(
 
 	legend
 		.append("rect")
+		.attr("aria-hidden", "true")
 		.attr("width", legendWidth)
 		.attr("height", legendHeight)
 		.attr("rx", 4)
@@ -393,10 +399,45 @@ export function renderContractorFlow(
 			{ label: "Volume élevé", x: legendWidth, anchor: "end" },
 		] as const)
 		.join("text")
+		.attr("aria-hidden", "true")
 		.attr("x", (label) => label.x)
 		.attr("y", legendHeight + 16)
 		.attr("text-anchor", (label) => label.anchor)
 		.attr("fill", stagePalette.muted)
 		.attr("font-size", flowLabelFontSize)
 		.text((label) => label.label);
+
+	interface ContractorRow {
+		contractor: FlowNodeDatum;
+		bySite: Record<string, number>;
+	}
+
+	const contractorRows: ContractorRow[] = flow.contractors.map((contractor) => {
+		const bySite: Record<string, number> = {};
+		for (const site of flow.sites) {
+			bySite[site.id] = valueByRoute.get(`${contractor.id}__${site.id}`) ?? 0;
+		}
+		return { contractor, bySite };
+	});
+
+	appendDataTable({
+		container,
+		caption: "Satellites lancés par constructeur et site de lancement",
+		summary: description,
+		columns: [
+			{
+				header: "Constructeur",
+				accessor: (row: ContractorRow) => row.contractor.label,
+			},
+			...flow.sites.map((site) => ({
+				header: site.label,
+				accessor: (row: ContractorRow) => formatCount(row.bySite[site.id] ?? 0),
+			})),
+			{
+				header: "Total constructeur",
+				accessor: (row: ContractorRow) => formatCount(row.contractor.value),
+			},
+		],
+		rows: contractorRows,
+	});
 }

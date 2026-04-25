@@ -1,4 +1,9 @@
 import * as d3 from "d3";
+import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
 	appendAxisLabel,
@@ -20,6 +25,11 @@ import type { AgeGroupDatum } from "../types";
 
 type DensityPoint = [number, number];
 const AGE_CAP = 30;
+
+interface AgeGroupRow extends AgeGroupDatum {
+	cutoffCount: number;
+	density: DensityPoint[];
+}
 
 function gaussianKernel(bandwidth: number) {
 	return (value: number) =>
@@ -48,7 +58,7 @@ export function renderAgeRidge(
 	const innerWidth = width - margin.left - margin.right;
 	const innerHeight = height - margin.top - margin.bottom;
 	const domain = d3.range(0, AGE_CAP + 0.25, 0.25);
-	const densities = data.map((group) => ({
+	const densities: AgeGroupRow[] = data.map((group) => ({
 		...group,
 		cutoffCount: group.ages.filter((age) => age > AGE_CAP).length,
 		density: kernelDensityEstimator(
@@ -91,21 +101,38 @@ export function renderAgeRidge(
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Ridge plot sur l'âge des satellites");
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const dominant = [...densities].sort(
+		(left, right) => right.total - left.total,
+	)[0];
+	const mostExpired = [...densities].sort(
+		(left, right) => right.expiredShare - left.expiredShare,
+	)[0];
+	const description = dominant
+		? `Distribution des âges sur ${densities.length} catégories de satellites (tronquée à ${AGE_CAP} ans). ${dominant.label} regroupe le plus grand parc avec ${formatCount(dominant.total)} satellites, âge médian ${formatDecimal(dominant.medianAge)} ans. ${mostExpired ? `${mostExpired.label} concentre la part la plus élevée de satellites au-delà de leur durée de vie attendue (${formatPercent(mostExpired.expiredShare)}).` : ""}`
+		: "Distribution des âges des satellites actifs par catégorie.";
+
+	appendFigureDescription({
+		svg,
+		title: "Distribution des âges des satellites actifs par catégorie",
+		description,
+	});
+
 	const root = svg
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(d3.axisBottom(x).ticks(8))
 		.call((axis) => styleAxis(axis));
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.call(d3.axisLeft(y).tickSize(0))
 		.call((axis) =>
 			styleAxis(axis, {
@@ -122,7 +149,7 @@ export function renderAgeRidge(
 		.attr("dominant-baseline", "alphabetic");
 
 	const groups = root
-		.selectAll(".ridge")
+		.selectAll<SVGGElement, AgeGroupRow>(".ridge")
 		.data(densities)
 		.join("g")
 		.attr("class", "ridge")
@@ -130,12 +157,14 @@ export function renderAgeRidge(
 
 	groups
 		.append("path")
+		.attr("aria-hidden", "true")
 		.attr("fill", (group) => group.color)
 		.attr("fill-opacity", 0.7)
 		.attr("d", (group) => area(group.density));
 
 	groups
 		.append("path")
+		.attr("aria-hidden", "true")
 		.attr("fill", stagePalette.expired)
 		.attr("fill-opacity", 0.85)
 		.attr("d", (group) => {
@@ -150,6 +179,7 @@ export function renderAgeRidge(
 
 	groups
 		.append("path")
+		.attr("aria-hidden", "true")
 		.attr("fill", "none")
 		.attr("stroke", "rgba(255,255,255,0.7)")
 		.attr("stroke-width", 1.4)
@@ -158,6 +188,7 @@ export function renderAgeRidge(
 	groups
 		.filter((group) => group.cutoffCount > 0)
 		.append("line")
+		.attr("aria-hidden", "true")
 		.attr("x1", x(AGE_CAP))
 		.attr("x2", x(AGE_CAP))
 		.attr("y1", 0)
@@ -172,6 +203,7 @@ export function renderAgeRidge(
 	groups
 		.filter((group) => group.cutoffCount > 0)
 		.append("circle")
+		.attr("aria-hidden", "true")
 		.attr("cx", x(AGE_CAP))
 		.attr(
 			"cy",
@@ -184,6 +216,7 @@ export function renderAgeRidge(
 
 	groups
 		.append("line")
+		.attr("aria-hidden", "true")
 		.attr("x1", (group) => x(group.medianLifetime))
 		.attr("x2", (group) => x(group.medianLifetime))
 		.attr("y1", 0)
@@ -192,6 +225,44 @@ export function renderAgeRidge(
 		.attr("stroke-width", 1.4)
 		.attr("stroke-dasharray", "5 5");
 
+	const showGroupTooltip = (
+		event: PointerEvent | MouseEvent,
+		group: AgeGroupRow,
+	) => {
+		highlight(group.id);
+		const extraRows =
+			group.cutoffCount > 0
+				? [
+						{
+							label: `Au-delà de ${AGE_CAP} ans`,
+							value: formatCount(group.cutoffCount),
+						},
+					]
+				: [];
+		tooltip.show(
+			buildTooltip({
+				title: group.label,
+				rows: [
+					{
+						label: "Âge médian",
+						value: `${formatDecimal(group.medianAge)} ans`,
+					},
+					{
+						label: "Durée de vie médiane",
+						value: `${formatDecimal(group.medianLifetime)} ans`,
+					},
+					{
+						label: "Satellites expirés",
+						value: formatPercent(group.expiredShare),
+					},
+					{ label: "Total", value: formatCount(group.total) },
+					...extraRows,
+				],
+			}),
+			event,
+		);
+	};
+
 	groups
 		.append("rect")
 		.attr("x", 0)
@@ -199,44 +270,33 @@ export function renderAgeRidge(
 		.attr("width", innerWidth)
 		.attr("height", 120)
 		.attr("fill", "transparent")
-		.on("pointerenter", (event, group) => {
-			highlight(group.id);
-			const extraRows =
-				group.cutoffCount > 0
-					? [
-							{
-								label: `Au-delà de ${AGE_CAP} ans`,
-								value: formatCount(group.cutoffCount),
-							},
-						]
-					: [];
-			tooltip.show(
-				buildTooltip({
-					title: group.label,
-					rows: [
-						{
-							label: "Âge médian",
-							value: `${formatDecimal(group.medianAge)} ans`,
-						},
-						{
-							label: "Durée de vie médiane",
-							value: `${formatDecimal(group.medianLifetime)} ans`,
-						},
-						{
-							label: "Satellites expirés",
-							value: formatPercent(group.expiredShare),
-						},
-						{ label: "Total", value: formatCount(group.total) },
-						...extraRows,
-					],
-				}),
-				event,
-			);
-		})
+		.attr("tabindex", 0)
+		.attr("role", "button")
+		.attr("aria-describedby", tooltip.id)
+		.attr(
+			"aria-label",
+			(group) =>
+				`${group.label} : ${formatCount(group.total)} satellites, âge médian ${formatDecimal(group.medianAge)} ans, durée de vie médiane ${formatDecimal(group.medianLifetime)} ans, ${formatPercent(group.expiredShare)} au-delà de leur durée de vie attendue${group.cutoffCount > 0 ? `, ${formatCount(group.cutoffCount)} au-delà de ${AGE_CAP} ans` : ""}`,
+		)
+		.style("cursor", "pointer")
+		.on("pointerenter", (event, group) => showGroupTooltip(event, group))
 		.on("pointermove", (event) => tooltip.move(event))
 		.on("pointerleave", () => {
 			highlight(null);
 			tooltip.hide();
+		})
+		.on("focus", function handleFocus(_event, group) {
+			showGroupTooltip(focusEventFromElement(this), group);
+		})
+		.on("blur", () => {
+			highlight(null);
+			tooltip.hide();
+		})
+		.on("keydown", function handleKeydown(event, group) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				showGroupTooltip(focusEventFromElement(this), group);
+			}
 		});
 
 	function highlight(groupId: string | null) {
@@ -253,6 +313,7 @@ export function renderAgeRidge(
 
 	groups
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("x", innerWidth + 126)
 		.attr("y", -60)
 		.attr("text-anchor", "end")
@@ -264,6 +325,7 @@ export function renderAgeRidge(
 	groups
 		.filter((group) => group.cutoffCount > 0)
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("x", innerWidth + 126)
 		.attr("y", -40)
 		.attr("text-anchor", "end")
@@ -286,4 +348,38 @@ export function renderAgeRidge(
 		"Des flottes très jeunes, mais pas toutes au même rythme",
 		"Les méga-constellations restent très récentes, tandis que d'autres catégories s'approchent ou dépassent leur durée de vie.",
 	);
+
+	appendDataTable({
+		container,
+		caption: "Distribution des âges par catégorie de satellites",
+		summary: description,
+		columns: [
+			{
+				header: "Catégorie",
+				accessor: (row: AgeGroupRow) => row.label,
+			},
+			{
+				header: "Total",
+				accessor: (row: AgeGroupRow) => formatCount(row.total),
+			},
+			{
+				header: "Âge médian",
+				accessor: (row: AgeGroupRow) => `${formatDecimal(row.medianAge)} ans`,
+			},
+			{
+				header: "Durée de vie médiane",
+				accessor: (row: AgeGroupRow) =>
+					`${formatDecimal(row.medianLifetime)} ans`,
+			},
+			{
+				header: "Satellites expirés",
+				accessor: (row: AgeGroupRow) => formatPercent(row.expiredShare),
+			},
+			{
+				header: `Au-delà de ${AGE_CAP} ans`,
+				accessor: (row: AgeGroupRow) => formatCount(row.cutoffCount),
+			},
+		],
+		rows: densities,
+	});
 }

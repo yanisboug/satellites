@@ -1,4 +1,9 @@
 import * as d3 from "d3";
+import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
 	appendChartHeader,
@@ -19,6 +24,11 @@ import { buildTooltip } from "../helpers/tooltipContent";
 import type { OrbitMissionDatum } from "../types";
 
 const BAR_RADIUS = 12;
+const COLORS = {
+	commercial: "#fdba74",
+	other: "#475569",
+} as const;
+const STRIPE_PATTERN_ID = "orbit-type-stripes";
 
 function horizontalStackSegmentPath(
 	x0: number,
@@ -98,25 +108,60 @@ export function renderOrbitTypeBars(
 		.range([0, innerWidth]);
 	const stack = d3.stack<OrbitMissionDatum>().keys(["commercial", "other"]);
 	const series = stack(data);
-	const colors = {
-		commercial: "#f4a261",
-		other: "#64748b",
-	};
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr(
-			"aria-label",
-			"Barres empilées par type d'orbite et mission commerciale",
-		);
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const totalCommercial = d3.sum(data, (item) => item.commercial);
+	const totalAll = d3.sum(data, (item) => item.total) || 1;
+	const sortedByShare = [...data].sort(
+		(left, right) =>
+			right.commercial / Math.max(1, right.total) -
+			left.commercial / Math.max(1, left.total),
+	);
+	const topShare = sortedByShare[0];
+	const bottomShare = sortedByShare.at(-1);
+	const description =
+		topShare && bottomShare
+			? `Sur ${data.length} types d'orbite, les missions commerciales représentent ${formatPercent(totalCommercial / totalAll)} de l'ensemble. La part commerciale culmine à ${formatPercent(topShare.commercial / Math.max(1, topShare.total))} pour ${topShare.typeOrbit} et descend à ${formatPercent(bottomShare.commercial / Math.max(1, bottomShare.total))} pour ${bottomShare.typeOrbit}.`
+			: "Répartition des missions commerciales et autres par type d'orbite.";
+
+	appendFigureDescription({
+		svg,
+		title: "Missions commerciales et autres par type d'orbite",
+		description,
+	});
+
+	const defs = svg.append("defs");
+	const pattern = defs
+		.append("pattern")
+		.attr("id", STRIPE_PATTERN_ID)
+		.attr("patternUnits", "userSpaceOnUse")
+		.attr("width", 6)
+		.attr("height", 6)
+		.attr("patternTransform", "rotate(45)");
+	pattern
+		.append("rect")
+		.attr("width", 6)
+		.attr("height", 6)
+		.attr("fill", COLORS.other);
+	pattern
+		.append("line")
+		.attr("x1", 0)
+		.attr("x2", 0)
+		.attr("y1", 0)
+		.attr("y2", 6)
+		.attr("stroke", "rgba(226, 232, 240, 0.55)")
+		.attr("stroke-width", 1.4);
+
 	const root = svg
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.call(d3.axisLeft(y).tickSize(0))
 		.call((axis) =>
 			styleAxis(axis, {
@@ -129,6 +174,7 @@ export function renderOrbitTypeBars(
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(
 			d3
@@ -142,12 +188,25 @@ export function renderOrbitTypeBars(
 		.selectAll(".stack")
 		.data(series)
 		.join("g")
-		.attr("fill", (seriesItem) => colors[seriesItem.key as keyof typeof colors])
-		.selectAll("rect")
+		.attr(
+			"fill",
+			(seriesItem) =>
+				(seriesItem.key === "commercial"
+					? COLORS.commercial
+					: `url(#${STRIPE_PATTERN_ID})`) as string,
+		)
+		.selectAll<
+			SVGPathElement,
+			{
+				bounds: d3.SeriesPoint<OrbitMissionDatum>;
+				key: keyof typeof COLORS;
+				datum: OrbitMissionDatum;
+			}
+		>("path")
 		.data((seriesItem) =>
 			seriesItem.map((item, index) => ({
 				bounds: item,
-				key: seriesItem.key as keyof typeof colors,
+				key: seriesItem.key as keyof typeof COLORS,
 				datum: data[index],
 			})),
 		)
@@ -180,33 +239,63 @@ export function renderOrbitTypeBars(
 			);
 		})
 		.attr("shape-rendering", "geometricPrecision")
-		.on("pointerenter", (event, item) => {
-			highlight(item.datum.typeOrbit);
-			tooltip.show(
-				buildTooltip({
-					title: item.datum.typeOrbit,
-					rows: [
-						{ label: "Commercial", value: formatCount(item.datum.commercial) },
-						{ label: "Autres missions", value: formatCount(item.datum.other) },
-						{
-							label: "Part commerciale",
-							value: formatPercent(item.datum.commercial / item.datum.total),
-						},
-					],
-				}),
-				event,
-			);
-		})
+		.attr("tabindex", 0)
+		.attr("role", "button")
+		.attr("aria-describedby", tooltip.id)
+		.attr("aria-label", (item) =>
+			item.key === "commercial"
+				? `${item.datum.typeOrbit}, missions commerciales : ${formatCount(item.datum.commercial)} satellites (${formatPercent(item.datum.commercial / Math.max(1, item.datum.total))} du type)`
+				: `${item.datum.typeOrbit}, autres missions : ${formatCount(item.datum.other)} satellites (${formatPercent(item.datum.other / Math.max(1, item.datum.total))} du type)`,
+		)
+		.style("cursor", "pointer");
+
+	const showSegmentTooltip = (
+		event: PointerEvent | MouseEvent,
+		item: { datum: OrbitMissionDatum },
+	) => {
+		highlight(item.datum.typeOrbit);
+		tooltip.show(
+			buildTooltip({
+				title: item.datum.typeOrbit,
+				rows: [
+					{ label: "Commercial", value: formatCount(item.datum.commercial) },
+					{ label: "Autres missions", value: formatCount(item.datum.other) },
+					{
+						label: "Part commerciale",
+						value: formatPercent(item.datum.commercial / item.datum.total),
+					},
+				],
+			}),
+			event,
+		);
+	};
+
+	segments
+		.on("pointerenter", (event, item) => showSegmentTooltip(event, item))
 		.on("pointermove", (event) => tooltip.move(event))
 		.on("pointerleave", () => {
 			highlight(null);
 			tooltip.hide();
+		})
+		.on("focus", function handleFocus(_event, item) {
+			showSegmentTooltip(focusEventFromElement(this), item);
+		})
+		.on("blur", () => {
+			highlight(null);
+			tooltip.hide();
+		})
+		.on("keydown", function handleKeydown(event, item) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				showSegmentTooltip(focusEventFromElement(this), item);
+			}
 		});
 
 	const shareLabels = root
 		.selectAll(".orbit-share-label")
 		.data(data)
 		.join("text")
+		.attr("aria-hidden", "true")
 		.attr("x", (item) => x(item.total) + 12)
 		.attr("y", (item) => (y(item.typeOrbit) ?? 0) + y.bandwidth() / 2 + 5)
 		.attr("fill", stagePalette.text)
@@ -251,12 +340,12 @@ export function renderOrbitTypeBars(
 		items: [
 			{
 				label: "Commercial",
-				color: colors.commercial,
+				color: COLORS.commercial,
 				marker: { type: "rect" },
 			},
 			{
-				label: "Autres missions",
-				color: colors.other,
+				label: "Autres missions (hachures)",
+				color: COLORS.other,
 				marker: { type: "rect" },
 			},
 		],
@@ -267,4 +356,34 @@ export function renderOrbitTypeBars(
 		"Les missions commerciales privilégient quelques orbites",
 		"Les orbites non polaires inclinées, polaires et héliosynchrones portent l'essentiel du marché.",
 	);
+
+	appendDataTable({
+		container,
+		caption: "Missions commerciales et autres par type d'orbite",
+		summary: description,
+		columns: [
+			{
+				header: "Type d'orbite",
+				accessor: (row: OrbitMissionDatum) => row.typeOrbit,
+			},
+			{
+				header: "Commercial",
+				accessor: (row: OrbitMissionDatum) => formatCount(row.commercial),
+			},
+			{
+				header: "Autres missions",
+				accessor: (row: OrbitMissionDatum) => formatCount(row.other),
+			},
+			{
+				header: "Total",
+				accessor: (row: OrbitMissionDatum) => formatCount(row.total),
+			},
+			{
+				header: "Part commerciale",
+				accessor: (row: OrbitMissionDatum) =>
+					formatPercent(row.commercial / Math.max(1, row.total)),
+			},
+		],
+		rows: data,
+	});
 }

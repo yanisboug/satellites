@@ -568,3 +568,29 @@ body::before {
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 }
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.scene-viz svg [tabindex]:focus {
+	outline: 2px solid #fde68a;
+	outline-offset: 3px;
+}
+
+.scene-viz svg [tabindex]:focus:not(:focus-visible) {
+	outline: none;
+}
+
+.scene-viz svg [tabindex]:focus-visible {
+	outline: 2px solid #fde68a;
+	outline-offset: 3px;
+}

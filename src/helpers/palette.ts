@@ -1,24 +1,35 @@
+export const wong = {
+	sky: "#56B4E9",
+	blue: "#0072B2",
+	green: "#009E73",
+	orange: "#E69F00",
+	vermillion: "#D55E00",
+	purple: "#CC79A7",
+	yellow: "#F0E442",
+	grey: "#999999",
+} as const;
+
 export const countryPalette = new Map<string, string>([
-	["USA", "#2a9d8f"],
-	["United Kingdom", "#457b9d"],
-	["China", "#e76f51"],
-	["Russia", "#8d99ae"],
-	["France/Italy", "#f4a261"],
-	["Autre", "#a8dadc"],
+	["USA", wong.sky],
+	["United Kingdom", wong.blue],
+	["China", wong.vermillion],
+	["Russia", wong.purple],
+	["France/Italy", wong.orange],
+	["Autre", wong.grey],
 ]);
 
 export const orbitPalette = new Map<string, string>([
-	["LEO", "#2a9d8f"],
-	["MEO", "#e9c46a"],
-	["GEO", "#e76f51"],
-	["Elliptical", "#7a5195"],
-	["Non précisée", "#90a4ae"],
+	["LEO", wong.green],
+	["MEO", wong.yellow],
+	["GEO", wong.vermillion],
+	["Elliptical", wong.purple],
+	["Non précisée", "#cbd5e1"],
 ]);
 
 export const usagePalette = new Map<string, string>([
-	["Commercial", "#2a9d8f"],
-	["Militaire", "#e76f51"],
-	["Autre", "#577590"],
+	["Commercial", wong.sky],
+	["Militaire", wong.vermillion],
+	["Autre", wong.grey],
 ]);
 
 export const stagePalette = {

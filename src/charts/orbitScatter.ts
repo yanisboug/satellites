@@ -1,4 +1,5 @@
 import * as d3 from "d3";
+import { appendDataTable, appendFigureDescription } from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
 	appendAxisLabel,
@@ -8,12 +9,43 @@ import {
 	chartMargins,
 	chartTypography,
 } from "../helpers/chartFrame";
-import { formatKm } from "../helpers/formatters";
+import { formatCount, formatKm } from "../helpers/formatters";
 import { appendLegend } from "../helpers/legend";
 import { colorFromMap, orbitPalette, stagePalette } from "../helpers/palette";
 import type { TooltipController } from "../helpers/tooltip";
 import { buildTooltip } from "../helpers/tooltipContent";
 import type { OrbitScatterDatum } from "../types";
+
+const symbolByClass = new Map<string, d3.SymbolType>([
+	["LEO", d3.symbolCircle],
+	["MEO", d3.symbolSquare],
+	["GEO", d3.symbolTriangle],
+	["Elliptical", d3.symbolDiamond],
+	["Non précisée", d3.symbolCross],
+]);
+
+const SYMBOL_AREA = 26;
+
+function symbolForClass(orbitClass: string) {
+	return symbolByClass.get(orbitClass) ?? d3.symbolCircle;
+}
+
+function symbolNameForClass(orbitClass: string) {
+	const symbol = symbolByClass.get(orbitClass);
+	if (symbol === d3.symbolSquare) return "carré";
+	if (symbol === d3.symbolTriangle) return "triangle";
+	if (symbol === d3.symbolDiamond) return "losange";
+	if (symbol === d3.symbolCross) return "croix";
+	return "cercle";
+}
+
+interface OrbitClassSummary {
+	orbitClass: string;
+	count: number;
+	share: number;
+	medianPerigee: number;
+	medianApogee: number;
+}
 
 export function renderOrbitScatter(
 	container: HTMLElement,
@@ -27,12 +59,35 @@ export function renderOrbitScatter(
 	const x = d3.scaleLog().domain([100, 400000]).range([0, innerWidth]);
 	const y = d3.scaleLog().domain([100, 400000]).range([innerHeight, 0]);
 	const classes = [...new Set(data.map((item) => item.classOrbit))];
+	const symbol = d3.symbol().size(SYMBOL_AREA);
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Nuage de points sur les altitudes d'orbite");
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const summaries: OrbitClassSummary[] = classes
+		.map((orbitClass) => {
+			const subset = data.filter((item) => item.classOrbit === orbitClass);
+			return {
+				orbitClass,
+				count: subset.length,
+				share: subset.length / Math.max(1, data.length),
+				medianPerigee: d3.median(subset, (item) => item.perigee) ?? 0,
+				medianApogee: d3.median(subset, (item) => item.apogee) ?? 0,
+			};
+		})
+		.sort((left, right) => right.count - left.count);
+	const dominant = summaries[0];
+	const description = dominant
+		? `${formatCount(data.length)} satellites positionnés selon leur périgée et apogée. ${dominant.orbitClass} domine avec ${formatCount(dominant.count)} satellites (${Math.round(dominant.share * 100)} %), périgée médian ${formatKm(Math.round(dominant.medianPerigee))} et apogée médian ${formatKm(Math.round(dominant.medianApogee))}. Chaque classe d'orbite est codée par une couleur et une forme différentes (${classes.map((c) => `${c} : ${symbolNameForClass(c)}`).join(", ")}).`
+		: "Nuage de points sur les altitudes d'orbite.";
+
+	appendFigureDescription({
+		svg,
+		title: "Altitudes d'orbite : périgée vs apogée",
+		description,
+	});
+
 	const root = svg
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -40,6 +95,7 @@ export function renderOrbitScatter(
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(
 			d3
@@ -51,6 +107,7 @@ export function renderOrbitScatter(
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.call(
 			d3
 				.axisLeft(y)
@@ -61,15 +118,17 @@ export function renderOrbitScatter(
 
 	root
 		.append("line")
+		.attr("aria-hidden", "true")
 		.attr("x1", x(100))
 		.attr("y1", y(100))
 		.attr("x2", x(400000))
 		.attr("y2", y(400000))
-		.attr("stroke", "rgba(255,255,255,0.35)")
+		.attr("stroke", "rgba(255,255,255,0.45)")
 		.attr("stroke-dasharray", "8 6");
 
 	root
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("x", x(360000))
 		.attr("y", y(360000))
 		.attr("dy", "-0.7em")
@@ -80,14 +139,19 @@ export function renderOrbitScatter(
 
 	const points = root
 		.append("g")
-		.selectAll("circle")
+		.attr("aria-hidden", "true")
+		.selectAll("path")
 		.data(data)
-		.join("circle")
-		.attr("cx", (item) => x(item.perigee))
-		.attr("cy", (item) => y(item.apogee))
-		.attr("r", 2.6)
+		.join("path")
+		.attr(
+			"transform",
+			(item) => `translate(${x(item.perigee)}, ${y(item.apogee)})`,
+		)
+		.attr("d", (item) => symbol.type(symbolForClass(item.classOrbit))())
 		.attr("fill", (item) => colorFromMap(orbitPalette, item.classOrbit))
-		.attr("fill-opacity", 0.54)
+		.attr("fill-opacity", 0.85)
+		.attr("stroke", stagePalette.background)
+		.attr("stroke-width", 0.5)
 		.on("pointerenter", (event, item) => {
 			tooltip.show(
 				buildTooltip({
@@ -131,7 +195,7 @@ export function renderOrbitScatter(
 		x: 0,
 		y: 0,
 		items: classes.map((orbitClass) => ({
-			label: orbitClass,
+			label: `${orbitClass} (${symbolNameForClass(orbitClass)})`,
 			color: colorFromMap(orbitPalette, orbitClass),
 			onPointerEnter: () => updateHighlight(orbitClass),
 			onPointerLeave: () => updateHighlight(null),
@@ -148,5 +212,39 @@ export function renderOrbitScatter(
 	appendAxisLabel(root, "Périgée (km)", innerWidth / 2, innerHeight + 58);
 	appendAxisLabel(root, "Apogée (km)", -innerHeight / 2, -78, {
 		rotate: -90,
+	});
+
+	appendDataTable({
+		container,
+		caption:
+			"Statistiques par classe d'orbite (périgée et apogée médians, satellites recensés)",
+		summary: description,
+		columns: [
+			{
+				header: "Classe d'orbite",
+				accessor: (row: OrbitClassSummary) =>
+					`${row.orbitClass} (${symbolNameForClass(row.orbitClass)})`,
+			},
+			{
+				header: "Satellites",
+				accessor: (row: OrbitClassSummary) => formatCount(row.count),
+			},
+			{
+				header: "Part",
+				accessor: (row: OrbitClassSummary) =>
+					`${Math.round(row.share * 100)} %`,
+			},
+			{
+				header: "Périgée médian",
+				accessor: (row: OrbitClassSummary) =>
+					formatKm(Math.round(row.medianPerigee)),
+			},
+			{
+				header: "Apogée médian",
+				accessor: (row: OrbitClassSummary) =>
+					formatKm(Math.round(row.medianApogee)),
+			},
+		],
+		rows: summaries,
 	});
 }

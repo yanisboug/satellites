@@ -1,5 +1,10 @@
 import * as d3 from "d3";
 import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
+import {
 	appendChartHeader,
 	chartFrame,
 	chartInteraction,
@@ -40,7 +45,6 @@ export function renderOperatorBubbles(
 	const countries = [...new Set(bubbleData.map((item) => item.country))];
 	const maxShare = d3.max(bubbleData, (item) => item.share) ?? 0.001;
 
-	/* Area of disk ∝ share (market %) — radius ∝ sqrt(share) */
 	const radius = d3.scaleLinear().domain([0, maxShare]).range([8, 112]);
 
 	const packedNodes = d3.packSiblings(
@@ -78,19 +82,44 @@ export function renderOperatorBubbles(
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Bulles proportionnelles des opérateurs de satellites");
+		.attr("viewBox", `0 0 ${width} ${height}`);
 
-	const connectorRoot = svg.append("g").attr("class", "operator-connectors");
+	const sortedShares = [...bubbleData].sort(
+		(left, right) => right.share - left.share,
+	);
+	const top = sortedShares[0];
+	const second = sortedShares[1];
+	const totalShare = sortedShares.reduce((sum, item) => sum + item.share, 0);
+	const description = top
+		? `Top 10 des opérateurs représentant ${formatPercent(totalShare)} du parc. ${top.name} (${top.country}) domine avec ${formatCount(top.count)} satellites (${formatPercent(top.share)}), ${
+				second
+					? `devant ${second.name} (${second.country}) à ${formatPercent(second.share)}.`
+					: "."
+			} La surface des disques est proportionnelle à la part de marché.`
+		: "Top des opérateurs de satellites par taille de flotte.";
+
+	appendFigureDescription({
+		svg,
+		title: "Top opérateurs par taille de flotte (bulles proportionnelles)",
+		description,
+	});
+
+	const connectorRoot = svg
+		.append("g")
+		.attr("class", "operator-connectors")
+		.attr("aria-hidden", "true");
 
 	const stage = svg.append("g").attr("transform", "translate(0, 0)");
 
-	const showOperatorDetails = (event: PointerEvent, item: OperatorDatum) => {
+	const showOperatorDetails = (
+		event: PointerEvent | MouseEvent,
+		item: OperatorDatum,
+	) => {
 		highlight(item.name);
 		tooltip.show(
 			buildTooltip({
 				title: item.name,
+				subtitle: item.country,
 				rows: [
 					{ label: "Satellites actifs", value: formatCount(item.count) },
 					{ label: "Part du parc", value: formatPercent(item.share) },
@@ -130,14 +159,33 @@ export function renderOperatorBubbles(
 		});
 
 	const bubbleGroups = stage
-		.selectAll(".bubble-node")
+		.selectAll<SVGGElement, BubbleNode>(".bubble-node")
 		.data(nodes)
 		.join("g")
 		.attr("class", "bubble-node")
 		.attr("transform", (item) => `translate(${item.x}, ${item.y})`)
+		.attr("tabindex", 0)
+		.attr("role", "button")
+		.attr("aria-describedby", tooltip.id)
+		.attr(
+			"aria-label",
+			(item) =>
+				`${item.name}, ${item.country} : ${formatCount(item.count)} satellites actifs (${formatPercent(item.share)} du parc)`,
+		)
+		.style("cursor", "pointer")
 		.on("pointerenter", (event, item) => showOperatorDetails(event, item))
 		.on("pointermove", (event) => tooltip.move(event))
-		.on("pointerleave", clearOperatorDetails);
+		.on("pointerleave", clearOperatorDetails)
+		.on("focus", function handleFocus(_event, item) {
+			showOperatorDetails(focusEventFromElement(this), item);
+		})
+		.on("blur", clearOperatorDetails)
+		.on("keydown", function handleKeydown(event, item) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				showOperatorDetails(focusEventFromElement(this), item);
+			}
+		});
 
 	bubbleGroups
 		.append("circle")
@@ -147,10 +195,18 @@ export function renderOperatorBubbles(
 		.attr("stroke", "rgba(255,255,255,0.28)")
 		.attr("stroke-width", 1.2);
 
+	bubbleGroups
+		.append("title")
+		.text(
+			(item) =>
+				`${item.name} — ${item.country} — ${formatCount(item.count)} satellites (${formatPercent(item.share)})`,
+		);
+
 	const listW = width - listX - 20;
 	const list = svg
 		.append("g")
 		.attr("transform", `translate(${listX}, ${listTop})`)
+		.attr("aria-hidden", "true")
 		.selectAll<SVGGElement, OperatorDatum>(".operator-item")
 		.data(bubbleData)
 		.join("g")
@@ -241,7 +297,7 @@ export function renderOperatorBubbles(
 		.attr("fill", (item) => {
 			const base = d3.color(operatorColor(item.country));
 			return (
-				base?.copy({ opacity: 0.16 }).formatRgb() ?? "rgba(168, 218, 220, 0.16)"
+				base?.copy({ opacity: 0.16 }).formatRgb() ?? "rgba(153, 153, 153, 0.16)"
 			);
 		});
 
@@ -276,4 +332,23 @@ export function renderOperatorBubbles(
 		"Un quasi-monopole des opérateurs",
 		"Surface de chaque bulle proportionnelle à sa part du parc (%). Couleur = pays d'origine. Survolez la légende pour filtrer.",
 	);
+
+	appendDataTable({
+		container,
+		caption: "Top opérateurs de satellites par taille de flotte",
+		summary: description,
+		columns: [
+			{ header: "Opérateur", accessor: (row: OperatorDatum) => row.name },
+			{ header: "Pays", accessor: (row: OperatorDatum) => row.country },
+			{
+				header: "Satellites actifs",
+				accessor: (row: OperatorDatum) => formatCount(row.count),
+			},
+			{
+				header: "Part du parc",
+				accessor: (row: OperatorDatum) => formatPercent(row.share),
+			},
+		],
+		rows: bubbleData,
+	});
 }

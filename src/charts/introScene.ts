@@ -1,6 +1,16 @@
 import * as d3 from "d3";
+import { appendDataTable, appendFigureDescription } from "../helpers/a11y";
 import { stagePalette } from "../helpers/palette";
 import type { SummaryMetric } from "../types";
+
+const formatNumber = (value: number) =>
+	d3.format(",")(value).replace(/,/g, " ");
+
+interface IntroStat {
+	label: string;
+	value: string;
+	subvalue?: string;
+}
 
 export function renderIntroScene(
 	container: HTMLElement,
@@ -11,12 +21,40 @@ export function renderIntroScene(
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Introduction sur l'occupation de l'espace orbital");
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const stats: IntroStat[] = [
+		{
+			label: "Satellites actifs",
+			value: formatNumber(summary.totalSatellites),
+		},
+		{
+			label: "Part commerciale",
+			value: `${Math.round(summary.commercialShare * 100)} %`,
+		},
+		{
+			label: "Leader opérateur",
+			value: summary.dominantOperator.name,
+			subvalue: `${Math.round(summary.dominantOperator.share * 100)} % de la flotte`,
+		},
+		{
+			label: "Site de lancement n° 1",
+			value: summary.topLaunchSite.name,
+			subvalue: `${formatNumber(summary.topLaunchSite.count)} satellites`,
+		},
+	];
+
+	const description = `Vue d'ensemble du parc de satellites actifs : ${formatNumber(summary.totalSatellites)} engins, dont ${Math.round(summary.commercialShare * 100)} % à usage commercial. Opérateur dominant : ${summary.dominantOperator.name} avec ${Math.round(summary.dominantOperator.share * 100)} % de la flotte. Premier site de lancement : ${summary.topLaunchSite.name} avec ${formatNumber(summary.topLaunchSite.count)} satellites mis en orbite. Schéma orbital de référence indiquant LEO, MEO et GEO.`;
+
+	appendFigureDescription({
+		svg,
+		title: "Dynamiques et rapports de force en orbite — vue d'ensemble",
+		description,
+	});
 
 	svg
 		.append("rect")
+		.attr("aria-hidden", "true")
 		.attr("width", width)
 		.attr("height", height)
 		.attr("rx", 28)
@@ -34,7 +72,10 @@ export function renderIntroScene(
 	gradient.append("stop").attr("offset", "0%").attr("stop-color", "#081120");
 	gradient.append("stop").attr("offset", "100%").attr("stop-color", "#111b35");
 
-	const orbitGroup = svg.append("g").attr("transform", "translate(282, 322)");
+	const orbitGroup = svg
+		.append("g")
+		.attr("aria-hidden", "true")
+		.attr("transform", "translate(282, 322)");
 
 	orbitGroup
 		.append("circle")
@@ -76,28 +117,10 @@ export function renderIntroScene(
 			.text(item.label);
 	});
 
-	const stats = [
-		{
-			label: "Satellites actifs",
-			value: d3.format(",")(summary.totalSatellites).replace(/,/g, " "),
-		},
-		{
-			label: "Part commerciale",
-			value: `${Math.round(summary.commercialShare * 100)} %`,
-		},
-		{
-			label: "Leader opérateur",
-			value: `${summary.dominantOperator.name}`,
-			subvalue: `${Math.round(summary.dominantOperator.share * 100)} % de la flotte`,
-		},
-		{
-			label: "Site de lancement n° 1",
-			value: summary.topLaunchSite.name,
-			subvalue: `${d3.format(",")(summary.topLaunchSite.count).replace(/,/g, " ")} satellites`,
-		},
-	];
-
-	const cards = svg.append("g").attr("transform", "translate(558, 164)");
+	const cards = svg
+		.append("g")
+		.attr("aria-hidden", "true")
+		.attr("transform", "translate(558, 164)");
 
 	cards
 		.selectAll("g")
@@ -143,6 +166,7 @@ export function renderIntroScene(
 
 	svg
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("x", 70)
 		.attr("y", 80)
 		.attr("fill", stagePalette.highlight)
@@ -152,6 +176,7 @@ export function renderIntroScene(
 
 	svg
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("x", 70)
 		.attr("y", 122)
 		.attr("fill", stagePalette.text)
@@ -161,10 +186,26 @@ export function renderIntroScene(
 
 	svg
 		.append("text")
+		.attr("aria-hidden", "true")
 		.attr("x", 70)
 		.attr("y", 162)
 		.attr("fill", stagePalette.text)
 		.attr("font-size", 38)
 		.attr("font-weight", 700)
 		.text("de force en orbite");
+
+	appendDataTable({
+		container,
+		caption: "Indicateurs clés du parc de satellites actifs",
+		summary: description,
+		columns: [
+			{ header: "Indicateur", accessor: (row: IntroStat) => row.label },
+			{
+				header: "Valeur",
+				accessor: (row: IntroStat) =>
+					row.subvalue ? `${row.value} (${row.subvalue})` : row.value,
+			},
+		],
+		rows: stats,
+	});
 }

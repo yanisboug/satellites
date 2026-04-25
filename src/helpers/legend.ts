@@ -106,11 +106,34 @@ export function appendLegend(parent: SvgParent, options: LegendOptions) {
 				? `translate(${index * columnGap}, ${itemsOffsetY})`
 				: `translate(0, ${itemsOffsetY + index * rowGap})`,
 		)
+		.attr("tabindex", (item) =>
+			item.onPointerEnter || item.onPointerLeave ? 0 : null,
+		)
+		.attr("role", (item) =>
+			item.onPointerEnter || item.onPointerLeave ? "button" : null,
+		)
+		.attr("aria-label", (item) =>
+			item.onPointerEnter || item.onPointerLeave
+				? `Filtrer : ${item.label}`
+				: null,
+		)
 		.style("cursor", (item) =>
 			item.onPointerEnter || item.onPointerLeave ? "pointer" : null,
 		)
 		.on("pointerenter", (_, item) => item.onPointerEnter?.())
 		.on("pointerleave", (_, item) => item.onPointerLeave?.())
+		.on("focus", (_, item) => item.onPointerEnter?.())
+		.on("blur", (_, item) => item.onPointerLeave?.())
+		.on("keydown", (event: KeyboardEvent, item) => {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				item.onPointerEnter?.();
+			}
+			if (event.key === "Escape") {
+				item.onPointerLeave?.();
+				(event.currentTarget as HTMLElement | null)?.blur();
+			}
+		})
 		.call((groups) => {
 			groups.each((item) => {
 				const group = groups.filter((datum) => datum === item);

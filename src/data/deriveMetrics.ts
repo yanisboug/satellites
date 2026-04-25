@@ -26,10 +26,10 @@ const launchSiteCountries = new Map<string, string>([
 ]);
 
 const ageGroupColors = {
-	civil: "#6baed6",
-	communication: "#f4a261",
-	military: "#7a5195",
-	mega: "#2a9d8f",
+	civil: "#56B4E9",
+	communication: "#E69F00",
+	military: "#CC79A7",
+	mega: "#009E73",
 };
 
 const ageGroupDefinitions = [

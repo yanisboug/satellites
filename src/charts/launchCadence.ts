@@ -1,4 +1,9 @@
 import * as d3 from "d3";
+import {
+	appendDataTable,
+	appendFigureDescription,
+	focusEventFromElement,
+} from "../helpers/a11y";
 import { styleAxis } from "../helpers/axis";
 import {
 	appendChartHeader,
@@ -22,6 +27,8 @@ interface CadenceSeries {
 	color: string;
 	values: { year: number; value: number; datum: ClusterMetric }[];
 }
+
+const SECONDARY_COLOR = "#fda4af";
 
 export function renderLaunchCadence(
 	container: HTMLElement,
@@ -62,7 +69,7 @@ export function renderLaunchCadence(
 		{
 			id: "groupedLaunchDates",
 			label: "Lancements groupés",
-			color: "#e76f51",
+			color: SECONDARY_COLOR,
 			values: data.map((datum) => ({
 				year: datum.year,
 				value: datum.groupedLaunchDates,
@@ -81,9 +88,27 @@ export function renderLaunchCadence(
 	const svg = d3
 		.select(container)
 		.append("svg")
-		.attr("viewBox", `0 0 ${width} ${height}`)
-		.attr("role", "img")
-		.attr("aria-label", "Evolution des lancements et des lancements groupés");
+		.attr("viewBox", `0 0 ${width} ${height}`);
+
+	const peakDatum = data.reduce<ClusterMetric | null>((acc, item) => {
+		if (!acc || item.totalLaunchDates > acc.totalLaunchDates) {
+			return item;
+		}
+		return acc;
+	}, null);
+	const firstYear = data[0]?.year;
+	const lastDatum = data.at(-1);
+	const description =
+		firstYear !== undefined && lastDatum && peakDatum
+			? `Entre ${firstYear} et ${lastDatum.year}, les lancements annuels passent de ${formatCount(data[0]?.totalLaunchDates ?? 0)} à ${formatCount(lastDatum.totalLaunchDates)}, dont ${formatCount(lastDatum.groupedLaunchDates)} en lancements groupés. Le pic annuel est atteint en ${peakDatum.year} avec ${formatCount(peakDatum.totalLaunchDates)} lancements.`
+			: "Évolution annuelle des lancements et des lancements groupés.";
+
+	appendFigureDescription({
+		svg,
+		title: "Évolution annuelle des lancements et des lancements groupés",
+		description,
+	});
+
 	const root = svg
 		.append("g")
 		.attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -91,6 +116,7 @@ export function renderLaunchCadence(
 	root
 		.append("g")
 		.attr("class", "cadence-grid")
+		.attr("aria-hidden", "true")
 		.call(
 			d3
 				.axisLeft(y)
@@ -101,13 +127,14 @@ export function renderLaunchCadence(
 		.call((axis) =>
 			axis
 				.selectAll("line")
-				.attr("stroke", stagePalette.line)
+				.attr("stroke", "rgba(148, 163, 184, 0.45)")
 				.attr("stroke-dasharray", "3 8"),
 		)
 		.call((axis) => axis.select(".domain").remove());
 
 	const xAxis = root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.attr("transform", `translate(0, ${innerHeight})`)
 		.call(
 			d3
@@ -124,6 +151,7 @@ export function renderLaunchCadence(
 
 	root
 		.append("g")
+		.attr("aria-hidden", "true")
 		.call(d3.axisLeft(y).ticks(5))
 		.call((axis) => styleAxis(axis));
 
@@ -132,24 +160,25 @@ export function renderLaunchCadence(
 		.data(series)
 		.join("path")
 		.attr("class", "cadence-line")
+		.attr("aria-hidden", "true")
 		.attr("fill", "none")
 		.attr("stroke", (item) => item.color)
 		.attr("stroke-width", 3)
 		.attr("stroke-linecap", "round")
 		.attr("stroke-linejoin", "round")
+		.attr("stroke-dasharray", (item) =>
+			item.id === "groupedLaunchDates" ? "8 6" : null,
+		)
 		.attr("d", (item) => line(item.values))
 		.style("pointer-events", "none");
 
+	const pointData = series.flatMap((item) =>
+		item.values.map((value) => ({ ...value, series: item })),
+	);
+
 	const points = root
-		.selectAll<
-			SVGCircleElement,
-			CadenceSeries["values"][number] & { series: CadenceSeries }
-		>(".cadence-point")
-		.data(
-			series.flatMap((item) =>
-				item.values.map((value) => ({ ...value, series: item })),
-			),
-		)
+		.selectAll<SVGCircleElement, (typeof pointData)[number]>(".cadence-point")
+		.data(pointData)
 		.join("circle")
 		.attr("class", "cadence-point")
 		.attr("cx", (item) => x(item.year))
@@ -158,34 +187,65 @@ export function renderLaunchCadence(
 		.attr("fill", (item) => item.series.color)
 		.attr("stroke", stagePalette.background)
 		.attr("stroke-width", 1.5)
-		.style("cursor", "pointer")
+		.attr("tabindex", 0)
+		.attr("role", "button")
+		.attr("aria-describedby", tooltip.id)
+		.attr("aria-label", (item) =>
+			item.series.id === "totalLaunchDates"
+				? `${item.year} : ${formatCount(item.datum.totalLaunchDates)} lancements, dont ${formatCount(item.datum.groupedLaunchDates)} groupés`
+				: `${item.year} : ${formatCount(item.datum.groupedLaunchDates)} lancements groupés sur ${formatCount(item.datum.totalLaunchDates)} lancements`,
+		)
+		.style("cursor", "pointer");
+
+	const showPointTooltip = (
+		event: PointerEvent | MouseEvent,
+		item: (typeof pointData)[number],
+		element: SVGCircleElement,
+	) => {
+		highlightSeries(item.series.id, element);
+		tooltip.show(
+			buildTooltip({
+				title: `${item.year}`,
+				rows: [
+					{
+						label: "Lancements",
+						value: formatCount(item.datum.totalLaunchDates),
+					},
+					{
+						label: "Lancements groupés",
+						value: formatCount(item.datum.groupedLaunchDates),
+					},
+					{
+						label: "Satellites / lancement",
+						value: formatDecimal(item.datum.avgSatellitesPerLaunchDate),
+					},
+				],
+			}),
+			event,
+		);
+	};
+
+	points
 		.on("pointerenter", function handlePointerEnter(event, item) {
-			highlightSeries(item.series.id, this);
-			tooltip.show(
-				buildTooltip({
-					title: `${item.year}`,
-					rows: [
-						{
-							label: "Lancements",
-							value: formatCount(item.datum.totalLaunchDates),
-						},
-						{
-							label: "Lancements groupés",
-							value: formatCount(item.datum.groupedLaunchDates),
-						},
-						{
-							label: "Satellites / lancement",
-							value: formatDecimal(item.datum.avgSatellitesPerLaunchDate),
-						},
-					],
-				}),
-				event,
-			);
+			showPointTooltip(event, item, this);
 		})
 		.on("pointermove", (event) => tooltip.move(event))
 		.on("pointerleave", () => {
 			highlightSeries(null);
 			tooltip.hide();
+		})
+		.on("focus", function handleFocus(_event, item) {
+			showPointTooltip(focusEventFromElement(this), item, this);
+		})
+		.on("blur", () => {
+			highlightSeries(null);
+			tooltip.hide();
+		})
+		.on("keydown", function handleKeydown(event, item) {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				showPointTooltip(focusEventFromElement(this), item, this);
+			}
 		});
 
 	function highlightSeries(
@@ -215,16 +275,16 @@ export function renderLaunchCadence(
 		}
 	}
 
-	const latest = data.at(-1);
-	if (latest) {
+	if (lastDatum) {
 		root
 			.append("text")
-			.attr("x", x(latest.year) + 10)
-			.attr("y", y(latest.groupedLaunchDates) - 8)
-			.attr("fill", "#e76f51")
+			.attr("aria-hidden", "true")
+			.attr("x", x(lastDatum.year) + 10)
+			.attr("y", y(lastDatum.groupedLaunchDates) - 8)
+			.attr("fill", SECONDARY_COLOR)
 			.attr("font-size", 12)
 			.attr("font-weight", 600)
-			.text(`${formatCount(latest.groupedLaunchDates)} groupées`);
+			.text(`${formatCount(lastDatum.groupedLaunchDates)} groupées`);
 	}
 
 	appendLegend(svg, {
@@ -243,4 +303,28 @@ export function renderLaunchCadence(
 		"Les lancements groupés deviennent la norme",
 		"Deux courbes séparent le rythme des lancements et leur densification.",
 	);
+
+	appendDataTable({
+		container,
+		caption:
+			"Évolution annuelle des lancements totaux et des lancements groupés",
+		summary: description,
+		columns: [
+			{ header: "Année", accessor: (row: ClusterMetric) => row.year },
+			{
+				header: "Lancements",
+				accessor: (row: ClusterMetric) => formatCount(row.totalLaunchDates),
+			},
+			{
+				header: "Lancements groupés",
+				accessor: (row: ClusterMetric) => formatCount(row.groupedLaunchDates),
+			},
+			{
+				header: "Satellites par lancement (moyenne)",
+				accessor: (row: ClusterMetric) =>
+					formatDecimal(row.avgSatellitesPerLaunchDate),
+			},
+		],
+		rows: data,
+	});
 }

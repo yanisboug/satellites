@@ -5,6 +5,7 @@ interface TooltipOptions {
 }
 
 export interface TooltipController {
+	id: string;
 	show(
 		content: string,
 		event: PointerEvent | MouseEvent,
@@ -14,9 +15,18 @@ export interface TooltipController {
 	hide(): void;
 }
 
+let instanceCounter = 0;
+
 export function createTooltip(container: HTMLElement): TooltipController {
+	instanceCounter += 1;
 	const tooltip = document.createElement("div");
+	const id = `viz-tooltip-${instanceCounter}`;
 	tooltip.className = "viz-tooltip";
+	tooltip.id = id;
+	tooltip.setAttribute("role", "tooltip");
+	tooltip.setAttribute("aria-live", "polite");
+	tooltip.setAttribute("aria-atomic", "true");
+	tooltip.dataset.visible = "false";
 	container.append(tooltip);
 	let lastPlacement: TooltipPlacement = "right";
 	let tooltipWidth = 0;
@@ -50,6 +60,7 @@ export function createTooltip(container: HTMLElement): TooltipController {
 	};
 
 	return {
+		id,
 		show(content, event, options) {
 			tooltip.innerHTML = content;
 			tooltip.dataset.visible = "true";
